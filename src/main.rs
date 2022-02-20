@@ -1,11 +1,14 @@
-use rand::prelude::SliceRandom;
+mod card;
+mod game;
+mod player;
+mod state;
+mod table;
+
+use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-#[allow(dead_code)]
-mod logic;
-
 fn main() {
-    let state = logic::State::new(2).unwrap();
+    let state = state::State::new(2).unwrap();
     // dbg!(&state);
     for _ in 0..10 {
         let mut rng = thread_rng();
