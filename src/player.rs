@@ -1,12 +1,15 @@
+use std::slice::SliceIndex;
+
 use crate::card::Card;
 
 #[derive(Debug)]
 pub struct PlayerId(pub i8);
+
 #[derive(Debug)]
 pub struct Player {
     id: PlayerId,
     health: i16,
-    hand: Vec<Card>,
+    pub hand: Vec<Card>,
 }
 
 impl Player {
@@ -18,7 +21,7 @@ impl Player {
         }
     }
 
-    fn health_from_hand(hand: &Vec<Card>) -> u16 {
+    pub fn health_from_hand(hand: &Vec<Card>) -> u16 {
         hand.iter().map(|card| card.health_value()).sum()
     }
 }

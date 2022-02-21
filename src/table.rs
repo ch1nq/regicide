@@ -11,7 +11,7 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(_n_jesters: u8) -> Self {
+    pub fn new(n_jesters: u8) -> Self {
         let mut rng = thread_rng();
 
         let castle_deck = CardValue::royals()
@@ -26,7 +26,6 @@ impl Table {
             })
             .collect::<Vec<Card>>();
 
-        // TODO: Add jesters into deck
         let mut tavern_deck = CardValue::numbers()
             .iter()
             .flat_map(|value| {
@@ -37,6 +36,11 @@ impl Table {
             })
             .collect::<Vec<Card>>();
 
+        // Add jesters into deck
+        tavern_deck.append(&mut vec![
+            Card::new(CardSuit::None, CardValue::Jester);
+            n_jesters.into()
+        ]);
         tavern_deck.shuffle(&mut rng);
 
         // We can at most have all the cards in the deck in the discard pile

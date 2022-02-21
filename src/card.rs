@@ -1,15 +1,16 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Card {
-    suit: CardSuit,
-    value: CardValue,
+    pub suit: CardSuit,
+    pub value: CardValue,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum CardSuit {
     Spades,
     Hearts,
     Diamonds,
     Clubs,
+    None,
 }
 
 impl CardSuit {
@@ -19,8 +20,9 @@ impl CardSuit {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum CardValue {
+    Jester,
     Ace,
     Two,
     Three,
@@ -56,6 +58,7 @@ impl Card {
     pub fn health_value(&self) -> u16 {
         use CardValue::*;
         match self.value {
+            Jester => 0,
             Ace => 1,
             Two => 2,
             Three => 3,
@@ -75,6 +78,7 @@ impl Card {
     pub fn attack_value(&self) -> u16 {
         use CardValue::*;
         match self.value {
+            Jester => 0,
             Ace => 1,
             Two => 2,
             Three => 3,
