@@ -18,6 +18,7 @@ pub struct State {
 #[derive(Debug)]
 pub enum StateError {
     WrongNumberOfPlayers,
+    NotAnEnemy(Card),
 }
 
 impl std::fmt::Display for StateError {
@@ -55,63 +56,63 @@ impl State {
         todo!()
     }
 
+    fn enemy_health_value(enemy: &Card) -> Result<u16, StateError> {
+        use CardValue::*;
+        match enemy.value {
+            Jack => Ok(20),
+            Queen => Ok(30),
+            King => Ok(40),
+            _ => Err(StateError::NotAnEnemy(*enemy)),
+        }
+    }
+
     fn current_player(&self) -> &Player {
         self.players.get(self.has_turn.0 as usize).unwrap()
     }
 
     pub fn get_action_space(&self) -> Vec<Action> {
+        use crate::card::CardValue::*;
+
         let player = self.current_player();
 
         // Single card actions
         let mut actions: Vec<Action> = player.hand.iter().map(|card| Action::Play(*card)).collect();
 
-        // Animal combos
-        actions.extend(
-            player
-                .hand
-                .iter()
-                .filter(|card1| card1.value == CardValue::Ace)
-                .flat_map(|card1| {
-                    player
-                        .hand
-                        .iter()
-                        .filter(move |card2| card2 != &card1)
-                        .filter(|card2| card2.value != CardValue::Jester)
-                        .map(move |card2| Action::AnimalCombo(*card1, *card2))
-                }),
-            // BUG: If there are two Aces in the players hand, we
-            // get two of the same Actions, only with swapped cards.
-        );
-
-        // Combos
-        let valid_combo_cards = player
+        let animal_combos = player
             .hand
             .iter()
-            .filter(|card| match card.value {
-                CardValue::Two | CardValue::Three | CardValue::Four | CardValue::Five => true,
-                _ => false,
-            })
-            .unique_by(|card| card.value)
-            .collect::<Vec<&Card>>();
+            .filter(|card1| card1.value == Ace)
+            .flat_map(|card1| {
+                player
+                    .hand
+                    .iter()
+                    // This avoids duplicate actions with symmetric cards
+                    .filter(move |card2| match card2.value {
+                        Ace => card1.suit > card2.suit,
+                        _ => true,
+                    })
+                    .filter(|card2| card2.value != Jester)
+                    .map(move |card2| Action::AnimalCombo(*card1, *card2))
+            });
+        actions.extend(animal_combos);
 
-        for (i, card) in valid_combo_cards.iter().enumerate() {
-            let others = valid_combo_cards[i..]
+        // Combos of 2, 3 and 4 cards repspectively
+        for card_value in [Two, Three, Four, Five].iter() {
+            let same_value_cards = player
+                .hand
                 .iter()
-                .filter(|c| c.value == card.value)
-                .collect::<Vec<&&Card>>();
+                .filter(|c| c.value == *card_value)
+                .collect::<Vec<&Card>>();
             let combos = [2, 3, 4]
                 .iter()
-                .flat_map(|len| others.iter().combinations(*len))
+                .flat_map(|len| same_value_cards.iter().combinations(*len))
                 .filter(|combo| combo.iter().map(|c| c.attack_value()).sum::<u16>() < 10)
                 .map(|combo| match combo[..] {
-                    [c1, c2] => Action::Combo2(***c1, ***c2),
-                    [c1, c2, c3] => Action::Combo3(***c1, ***c2, ***c3),
-                    [c1, c2, c3, c4] => Action::Combo4(***c1, ***c2, ***c3, ***c4),
+                    [c1, c2] => Action::Combo2(**c1, **c2),
+                    [c1, c2, c3] => Action::Combo3(**c1, **c2, **c3),
+                    [c1, c2, c3, c4] => Action::Combo4(**c1, **c2, **c3, **c4),
                     _ => panic!("Combo of wrong size."),
                 });
-            // BUG: A player can get multiple of the same combinations. I am not exactly sure why.
-            // A solution might be to simply filter out duplicates after all actions have been added,
-            // but it would be better to fix the root of the problem.
             actions.extend(combos);
         }
 
