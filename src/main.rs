@@ -4,22 +4,25 @@ mod player;
 mod state;
 mod table;
 
+use game::GameStatus;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
 fn main() {
-    // test_multicombo_bug();
-}
-
-fn simulate_10_moves() {
-    let state = state::State::new(2).unwrap();
+    let mut state = state::State::new(2).unwrap();
 
     for _ in 0..10 {
         let mut rng = thread_rng();
         let actions = state.get_action_space();
         let action = actions.choose(&mut rng).unwrap();
         dbg!(action);
-        let state = state.take_action(action);
+        match state.take_action(action) {
+            GameStatus::InProgress(new_state) => state = new_state,
+            GameStatus::HasEnded(result) => {
+                dbg!(result);
+                break;
+            }
+        };
     }
 }
 

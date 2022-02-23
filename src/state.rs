@@ -1,18 +1,19 @@
-use crate::card::{Card, CardValue};
+use crate::card::{Card, CardSuit, CardValue};
 use crate::game::{Action, GameStatus};
 use crate::player::{Player, PlayerId};
 use crate::table::Table;
 use itertools::Itertools;
 use std::error::Error;
 use std::fmt::Formatter;
+use std::ops::Mul;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct State {
     table: Table,
     pub players: Vec<Player>,
     has_turn: PlayerId,
-    shield: u16,
     times_yielded: usize,
+    max_hand_size: u8,
 }
 
 #[derive(Debug)]
@@ -47,23 +48,99 @@ impl State {
             table,
             players,
             has_turn: PlayerId(0),
-            shield: 0,
             times_yielded: 0,
+            max_hand_size,
         })
     }
 
-    pub fn take_action(&self, _action: &Action) -> GameStatus {
-        todo!()
+    pub fn take_action(&self, action: &Action) -> GameStatus {
+        let mut next_state = self.clone();
+        Self::apply_action(&mut next_state, action);
+        GameStatus::InProgress(next_state)
     }
 
-    fn enemy_health_value(enemy: &Card) -> Result<u16, StateError> {
-        use CardValue::*;
-        match enemy.value {
-            Jack => Ok(20),
-            Queen => Ok(30),
-            King => Ok(40),
-            _ => Err(StateError::NotAnEnemy(*enemy)),
+    fn apply_action(&mut self, action: &Action) {
+        // Step 1: Play a card from hand to attack the enemy
+        let cards = match &action {
+            Action::Play(c) => vec![c],
+            Action::AnimalCombo(c1, c2) => vec![c1, c2],
+            Action::Combo2(c1, c2) => vec![c1, c2],
+            Action::Combo3(c1, c2, c3) => vec![c1, c2, c3],
+            Action::Combo4(c1, c2, c3, c4) => vec![c1, c2, c3, c4],
+            Action::Yield => vec![],
+        };
+        let mut attack_value: u16 = cards.iter().map(|c| c.attack_value()).sum();
+
+        // TODO: Handle yielding
+
+        // Step 2: Activate the played card’s suit power
+
+        let suits: Vec<CardSuit> = cards.iter().map(|c| c.suit).collect();
+
+        // Shield against enemy attack: During Step 4, reduce the attack
+        // value of the current enemy by the attack value played. The shield effects
+        // of spades are cumulative for all spades played against this enemy by any
+        // player, and remain in effect until the enemy is defeated.
+        if suits.contains(&CardSuit::Spades) {
+            if let Some(enemy) = self.table.get_current_enemy() {
+                enemy.decrease_attack(attack_value);
+            }
         }
+
+        // Heal from the discard: Shuffle the discard pile then count
+        // out a number of cards facedown equal to the attack value played. Place
+        // them under the Tavern deck (no peeking!) then, return the discard pile
+        // to the table, faceup.
+        if suits.contains(&CardSuit::Hearts) {
+            self.table.heal_from_discard(attack_value as u8)
+        }
+
+        // The current player draws a card. The other players follow
+        // in clockwise order drawing one card at a time until a number of cards
+        // equal to the attack value played have been drawn. Players that have
+        // reached their maximum hand size are skipped. Players may never draw cards
+        // over their maximum hand size. There is no penalty for failing to draw
+        // cards from an empty Tavern deck.
+        if suits.contains(&CardSuit::Diamonds) {
+            for i in 0..attack_value {
+                for offset in 0..self.players.len() as u16 {
+                    let index = ((i + offset) % (self.players.len() - 1) as u16) as usize;
+                    let player = self.players.get_mut(index).unwrap();
+                    if (player.hand.len()) < self.max_hand_size as usize {
+                        let mut card = self.table.draw_cards(1);
+                        player.hand.append(&mut card);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // From rules: Double damage: During Step 3, damage dealt by clubs counts
+        // for double. E.g., The 8 of Clubs deals 16 damage.
+        if suits.contains(&CardSuit::Clubs) {
+            attack_value *= 2;
+        };
+
+        // Step 3: Deal damage and check to see if the enemy is defeated
+        if let Some(enemy) = self.table.get_current_enemy() {
+            enemy.take_damage(attack_value);
+
+            use std::cmp::Ordering::*;
+            let enemy_card = *enemy.card();
+            match enemy.health().cmp(&0) {
+                Less => {
+                    self.table.discard_card(enemy_card);
+                    self.table.discard_attack_cards();
+                }
+                Equal => {
+                    self.table.add_to_top_of_tavern_deck(enemy_card);
+                    self.table.discard_attack_cards();
+                }
+                Greater => {}
+            }
+        }
+
+        // Step 4: Suffer damage from the enemy by discarding cards
     }
 
     fn current_player(&self) -> &Player {
