@@ -121,6 +121,10 @@ impl Table {
         self.discard_pile.push(card);
     }
 
+    pub fn add_attack_cards(&mut self, cards: &Vec<Card>) {
+        self.attack_cards.extend(cards.iter());
+    }
+
     pub fn discard_attack_cards(&mut self) {
         self.discard_pile.append(&mut self.attack_cards);
     }

@@ -61,20 +61,21 @@ impl State {
 
     fn apply_action(&mut self, action: &Action) {
         // Step 1: Play a card from hand to attack the enemy
-        let cards = match &action {
-            Action::Play(c) => vec![c],
-            Action::AnimalCombo(c1, c2) => vec![c1, c2],
-            Action::Combo2(c1, c2) => vec![c1, c2],
-            Action::Combo3(c1, c2, c3) => vec![c1, c2, c3],
-            Action::Combo4(c1, c2, c3, c4) => vec![c1, c2, c3, c4],
+        let cards = match action {
+            Action::Play(c) => vec![*c],
+            Action::AnimalCombo(c1, c2) => vec![*c1, *c2],
+            Action::Combo2(c1, c2) => vec![*c1, *c2],
+            Action::Combo3(c1, c2, c3) => vec![*c1, *c2, *c3],
+            Action::Combo4(c1, c2, c3, c4) => vec![*c1, *c2, *c3, *c4],
             Action::Yield => vec![],
         };
         let mut attack_value: u16 = cards.iter().map(|c| c.attack_value()).sum();
 
+        self.table.add_attack_cards(&cards);
+
         // TODO: Handle yielding
 
         // Step 2: Activate the played card’s suit power
-
         let suits: Vec<CardSuit> = cards.iter().map(|c| c.suit).collect();
 
         // Shield against enemy attack: During Step 4, reduce the attack
