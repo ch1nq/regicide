@@ -7,7 +7,7 @@ pub struct PlayerId(pub usize);
 
 impl PlayerId {
     pub fn next_id(&self, total_players: usize) -> Self {
-        PlayerId((self.0 + 1) % (total_players - 1))
+        PlayerId((self.0 + 1) % total_players)
     }
 }
 

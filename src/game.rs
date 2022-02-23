@@ -14,7 +14,7 @@ pub enum GameStatus {
 
 #[derive(Debug)]
 struct Game {}
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Action {
     Play(Card),
     AnimalCombo(Card, Card),
@@ -22,5 +22,5 @@ pub enum Action {
     Combo3(Card, Card, Card),
     Combo4(Card, Card, Card, Card),
     Yield,
-    Discard([Option<Card>; 10]),
+    Discard(Vec<Card>),
 }

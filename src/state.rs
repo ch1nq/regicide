@@ -60,29 +60,39 @@ impl State {
     }
 
     fn apply_action(mut self, action: &Action) -> GameStatus {
-        if let Action::Discard(discard_cards) = action {
-            self.current_player_mut().hand = self
-                .current_player_mut()
-                .hand
-                .iter()
-                .filter(|&card| !discard_cards.contains(&Some(*card)))
-                .map(|c| *c)
-                .collect();
+        match action {
+            Action::Discard(discard_cards) => {
+                self.current_player_mut().hand = self
+                    .current_player_mut()
+                    .hand
+                    .iter()
+                    .filter(|&card| !discard_cards.contains(card))
+                    .map(|c| *c)
+                    .collect();
 
-            self.must_discard = None;
-            self.has_turn = self.has_turn.next_id(self.players.len());
-            return GameStatus::InProgress(self);
+                self.must_discard = None;
+                self.has_turn = self.has_turn.next_id(self.players.len());
+                GameStatus::InProgress(self)
+            }
+            Action::Yield => {
+                // All players cannot yield consequtively
+                if self.times_yielded < self.players.len() {
+                    GameStatus::HasEnded(GameResult::Lost)
+                } else {
+                    self.times_yielded += 1;
+                    self.play_cards(vec![])
+                }
+            }
+            Action::Play(c) => self.play_cards(vec![*c]),
+            Action::AnimalCombo(c1, c2) => self.play_cards(vec![*c1, *c2]),
+            Action::Combo2(c1, c2) => self.play_cards(vec![*c1, *c2]),
+            Action::Combo3(c1, c2, c3) => self.play_cards(vec![*c1, *c2, *c3]),
+            Action::Combo4(c1, c2, c3, c4) => self.play_cards(vec![*c1, *c2, *c3, *c4]),
         }
+    }
 
+    fn play_cards(mut self, cards: Vec<Card>) -> GameStatus {
         // Step 1: Play a card from hand to attack the enemy
-        let cards = match action {
-            Action::Play(c) => vec![*c],
-            Action::AnimalCombo(c1, c2) => vec![*c1, *c2],
-            Action::Combo2(c1, c2) => vec![*c1, *c2],
-            Action::Combo3(c1, c2, c3) => vec![*c1, *c2, *c3],
-            Action::Combo4(c1, c2, c3, c4) => vec![*c1, *c2, *c3, *c4],
-            _ => vec![],
-        };
         let mut attack_value: u16 = cards.iter().map(|c| c.attack_value()).sum();
 
         self.table.add_attack_cards(&cards);
@@ -119,7 +129,7 @@ impl State {
         if suits.contains(&CardSuit::Diamonds) {
             for i in 0..attack_value {
                 for offset in 0..self.players.len() as u16 {
-                    let index = ((i + offset) % (self.players.len() - 1) as u16) as usize;
+                    let index = ((i + offset) % self.players.len() as u16) as usize;
                     let player = self.players.get_mut(index).unwrap();
                     if (player.hand.len()) < self.max_hand_size as usize {
                         let mut card = self.table.draw_cards(1);
@@ -130,7 +140,7 @@ impl State {
             }
         }
 
-        // From rules: Double damage: During Step 3, damage dealt by clubs counts
+        // Double damage: During Step 3, damage dealt by clubs counts
         // for double. E.g., The 8 of Clubs deals 16 damage.
         if suits.contains(&CardSuit::Clubs) {
             attack_value *= 2;
@@ -157,7 +167,6 @@ impl State {
                         GameStatus::InProgress(self)
                     }
                     Ordering::Greater => {
-                        // TODO:
                         // Step 4: Suffer damage from the enemy by discarding cards
                         let attack = enemy.attack_value();
                         let health = self.current_player().total_hand_value();
@@ -186,10 +195,27 @@ impl State {
         self.table.current_enemy()
     }
 
-    pub fn get_action_space(&self) -> Vec<Action> {
-        use crate::card::CardValue::*;
+    fn discard_actions(&self, player: &Player, discard_amount: u8) -> Vec<Action> {
+        let actions = (0..player.hand.len())
+            .flat_map(|n_cards| {
+                player
+                    .hand
+                    .iter()
+                    .combinations(n_cards + 1)
+                    .filter(|cards| {
+                        let card_sum = cards.iter().map(|c| c.attack_value()).sum::<u16>();
 
-        let player = self.current_player();
+                        card_sum >= discard_amount as u16
+                    })
+                    .map(|cards| cards.iter().map(|c| **c).collect())
+                    .map(|cards| Action::Discard(cards))
+            })
+            .collect();
+        actions
+    }
+
+    fn attack_actions(&self, player: &Player) -> Vec<Action> {
+        use crate::card::CardValue::*;
 
         // Single card actions
         let mut actions: Vec<Action> = player.hand.iter().map(|card| Action::Play(*card)).collect();
@@ -232,10 +258,16 @@ impl State {
             actions.extend(combos);
         }
 
-        // All players cannot yield consequtively
-        if self.times_yielded < self.players.len() - 1 {
-            actions.push(Action::Yield);
-        }
+        actions.push(Action::Yield);
         actions
+    }
+
+    pub fn get_action_space(&self) -> Vec<Action> {
+        let player = self.current_player();
+
+        match self.must_discard {
+            Some(discard_amount) => self.discard_actions(player, discard_amount),
+            None => self.attack_actions(player),
+        }
     }
 }

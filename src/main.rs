@@ -4,25 +4,35 @@ mod player;
 mod state;
 mod table;
 
-use game::GameStatus;
+use game::{GameResult, GameStatus};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
 fn main() {
-    let mut state = state::State::new(2).unwrap();
+    let n_tries = 100;
+    let wins = (0..n_tries)
+        .map(|_| random_playout())
+        .filter(|r| match r {
+            GameResult::Won => true,
+            _ => false,
+        })
+        .count();
+    println!("{}/{} wins", wins, n_tries);
+}
 
-    for _ in 0..10 {
+fn random_playout() -> GameResult {
+    let mut state = state::State::new(1).unwrap();
+
+    loop {
         let mut rng = thread_rng();
         let actions = state.get_action_space();
         let action = actions.choose(&mut rng).unwrap();
-        dbg!((&state.current_enemy(), action));
         match state.take_action(action) {
             GameStatus::InProgress(new_state) => {
                 state = new_state;
             }
             GameStatus::HasEnded(result) => {
-                dbg!(result);
-                break;
+                return result;
             }
         };
     }
@@ -109,5 +119,12 @@ mod tests {
         assert_eq!(combo_count(&actions, "c2"), 6);
         assert_eq!(combo_count(&actions, "c3"), 4);
         assert_eq!(combo_count(&actions, "c4"), 1);
+    }
+
+    #[test]
+    fn playout_10k() {
+        for _ in 0..10_000 {
+            crate::random_playout();
+        }
     }
 }
