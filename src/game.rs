@@ -22,4 +22,5 @@ pub enum Action {
     Combo3(Card, Card, Card),
     Combo4(Card, Card, Card, Card),
     Yield,
+    Discard([Option<Card>; 10]),
 }

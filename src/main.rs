@@ -15,9 +15,11 @@ fn main() {
         let mut rng = thread_rng();
         let actions = state.get_action_space();
         let action = actions.choose(&mut rng).unwrap();
-        dbg!(action);
+        dbg!((&state.current_enemy(), action));
         match state.take_action(action) {
-            GameStatus::InProgress(new_state) => state = new_state,
+            GameStatus::InProgress(new_state) => {
+                state = new_state;
+            }
             GameStatus::HasEnded(result) => {
                 dbg!(result);
                 break;

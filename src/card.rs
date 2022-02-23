@@ -60,7 +60,7 @@ impl CardValue {
 
     pub fn royals() -> [CardValue; 3] {
         use CardValue::*;
-        [Jack, Queen, King]
+        [King, Queen, Jack]
     }
 }
 

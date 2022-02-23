@@ -40,6 +40,10 @@ impl Enemy {
         })
     }
 
+    pub fn attack_value(&self) -> u8 {
+        self.attack
+    }
+
     pub fn health(&self) -> i8 {
         self.health
     }
@@ -125,6 +129,7 @@ impl Table {
         self.attack_cards.extend(cards.iter());
     }
 
+    /// Place all cards played by players against the enemy in the discard pile.
     pub fn discard_attack_cards(&mut self) {
         self.discard_pile.append(&mut self.attack_cards);
     }
@@ -141,7 +146,16 @@ impl Table {
         self.tavern_deck.append(&mut cards);
     }
 
-    pub fn get_current_enemy(&mut self) -> Option<&mut Enemy> {
-        self.castle_deck.first_mut()
+    pub fn current_enemy(&self) -> Option<&Enemy> {
+        self.castle_deck.last()
+    }
+
+    pub fn current_enemy_mut(&mut self) -> Option<&mut Enemy> {
+        self.castle_deck.last_mut()
+    }
+
+    /// Turn the next card of the Castle deck face up.
+    pub fn next_enemy(&mut self) {
+        self.castle_deck.pop();
     }
 }
