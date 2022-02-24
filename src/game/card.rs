@@ -1,10 +1,12 @@
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+use core::fmt;
+
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Card {
     pub suit: CardSuit,
     pub value: CardValue,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub enum CardSuit {
     Spades,
     Hearts,
@@ -52,7 +54,7 @@ impl PartialOrd for CardSuit {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub enum CardValue {
     Jester,
     Ace,
@@ -113,5 +115,50 @@ impl AttackValue for Card {
 impl<'a> AttackValue for &'a Card {
     fn attack_value(&self) -> u16 {
         (*self).attack_value()
+    }
+}
+
+impl fmt::Debug for CardSuit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CardSuit::*;
+        let suit = match self {
+            Spades => "♠",
+            Hearts => "♥",
+            Diamonds => "♦",
+            Clubs => "♣",
+            _ => "",
+        };
+
+        write!(f, "{}", suit)
+    }
+}
+
+impl fmt::Debug for CardValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CardValue::*;
+        let value = match self {
+            Jester => "Jester",
+            Ace => "A",
+            Two => "2",
+            Three => "3",
+            Four => "4",
+            Five => "5",
+            Six => "6",
+            Seven => "7",
+            Eight => "8",
+            Nine => "9",
+            Ten => "10",
+            Jack => "J",
+            Queen => "Q",
+            King => "K",
+        };
+
+        write!(f, "{}", value)
+    }
+}
+
+impl fmt::Debug for Card {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}{:?}", self.suit, self.value)
     }
 }

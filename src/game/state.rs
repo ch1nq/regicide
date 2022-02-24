@@ -14,7 +14,15 @@ pub struct State {
     has_turn: PlayerId,
     times_yielded: usize,
     max_hand_size: u8,
-    must_discard: Option<u8>,
+    // must_discard: Option<u8>,
+    action_type: ActionType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ActionType {
+    PlayCards,
+    Discard(u8),
+    Jester,
 }
 
 impl State {
@@ -37,8 +45,13 @@ impl State {
             has_turn: PlayerId(0),
             times_yielded: 0,
             max_hand_size,
-            must_discard: None,
+            // must_discard: None,
+            action_type: ActionType::PlayCards,
         })
+    }
+
+    pub fn has_turn(&self) -> PlayerId {
+        self.has_turn
     }
 
     pub fn take_action(&self, action: &Action) -> GameStatus {
@@ -68,8 +81,9 @@ impl State {
                     .map(|c| *c)
                     .collect();
 
-                self.must_discard = None;
-                self.has_turn = self.has_turn.next_id(self.players.len());
+                // self.must_discard = None;
+                self.action_type = ActionType::PlayCards;
+                self.next_player();
                 GameStatus::InProgress(self)
             }
             Action::Yield => {
@@ -80,6 +94,11 @@ impl State {
                     GameStatus::HasEnded(GameResult::Lost)
                 }
             }
+            Action::ChangePlayer(id) => {
+                self.has_turn = *id;
+                self.action_type = ActionType::PlayCards;
+                GameStatus::InProgress(self)
+            }
         }
     }
 
@@ -89,7 +108,7 @@ impl State {
         // Step 1: Play a card from hand to attack the enemy
         let mut attack_value: u16 = cards.attack_sum();
 
-        // Apply jester
+        // Apply jester if played
         if cards.contains(&Card::new(None, CardValue::Jester)) {
             let prior_spades_played = self
                 .table
@@ -107,8 +126,10 @@ impl State {
                 }
                 enemy.apply_jester();
             }
+            self.action_type = ActionType::Jester;
         }
 
+        self.current_player_mut().remove_from_hand(&cards);
         self.table.add_attack_cards(&cards);
 
         // Step 2: Activate the played card’s suit power
@@ -120,6 +141,7 @@ impl State {
         };
         let jester_applied = match self.current_enemy() {
             Some(enemy) => enemy.jester_applied(),
+            // TODO: Hmm, why would a jester be applied just becease there is no enemy?
             _ => true,
         };
 
@@ -155,6 +177,7 @@ impl State {
                                 let player = self.players.get_mut(index).unwrap();
                                 if (player.hand.len()) < self.max_hand_size as usize {
                                     let mut card = self.table.draw_cards(1);
+                                    println!("Draw {:?} => {:?}", &card, &player);
                                     player.hand.append(&mut card);
                                     break;
                                 }
@@ -197,13 +220,18 @@ impl State {
                         let enemy_attack = enemy.attack_value();
                         let player_health = self.current_player().total_hand_value();
 
-                        if enemy_attack as u16 > player_health {
+                        if self.action_type == ActionType::Jester {
+                            GameStatus::InProgress(self)
+                        } else if enemy_attack as u16 > player_health {
                             GameStatus::HasEnded(GameResult::Lost)
                         } else {
                             // Player only needs to discard if they take damage
-                            self.must_discard = match enemy_attack {
-                                0 => Option::None,
-                                _ => Some(enemy_attack),
+                            self.action_type = match enemy_attack {
+                                0 => {
+                                    self.next_player();
+                                    ActionType::PlayCards
+                                }
+                                _ => ActionType::Discard(enemy_attack),
                             };
                             GameStatus::InProgress(self)
                         }
@@ -212,6 +240,10 @@ impl State {
             }
             Option::None => GameStatus::HasEnded(GameResult::Won),
         }
+    }
+
+    fn next_player(&mut self) {
+        self.has_turn = self.has_turn.next_id(self.players.len());
     }
 
     fn current_player_mut(&mut self) -> &mut Player {
@@ -229,10 +261,18 @@ impl State {
     pub fn get_action_space(&self) -> Vec<Action> {
         let player = self.current_player();
 
-        match self.must_discard {
-            Some(discard_amount) => self.discard_actions(player, discard_amount),
-            None => self.attack_actions(player),
+        match self.action_type {
+            ActionType::Discard(amount) => self.discard_actions(player, amount),
+            ActionType::PlayCards => self.attack_actions(player),
+            ActionType::Jester => self.jester_actions(),
         }
+    }
+
+    fn jester_actions(&self) -> Vec<Action> {
+        self.players
+            .iter()
+            .map(|p| Action::ChangePlayer(p.id()))
+            .collect()
     }
 
     fn discard_actions(&self, player: &Player, discard_amount: u8) -> Vec<Action> {
@@ -288,7 +328,7 @@ impl State {
             let combos = [2, 3, 4]
                 .iter()
                 .flat_map(|len| same_value_cards.iter().combinations(*len))
-                .filter(|combo| combo.iter().map(|c| **c).collect_vec().attack_sum() < 10)
+                .filter(|combo| combo.iter().map(|c| **c).collect_vec().attack_sum() <= 10)
                 .map(|combo| match combo[..] {
                     [c1, c2] => Action::Combo2(**c1, **c2),
                     [c1, c2, c3] => Action::Combo3(**c1, **c2, **c3),

@@ -4,8 +4,12 @@ mod player;
 pub mod state;
 mod table;
 
+use std::fmt::Debug;
+
 use card::Card;
 use state::State;
+
+use self::player::PlayerId;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -29,4 +33,5 @@ pub enum Action {
     Combo4(Card, Card, Card, Card),
     Yield,
     Discard(Vec<Card>),
+    ChangePlayer(PlayerId),
 }

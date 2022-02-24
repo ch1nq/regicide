@@ -1,6 +1,6 @@
 use super::card::{AttackSum, Card};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct PlayerId(pub usize);
 
 impl PlayerId {
@@ -23,7 +23,21 @@ impl Player {
         }
     }
 
+    pub fn id(&self) -> PlayerId {
+        self.id
+    }
+
     pub fn total_hand_value(&self) -> u16 {
         self.hand.attack_sum()
+    }
+
+    /// Removes specified cards from the players hand if they are present.
+    pub fn remove_from_hand(&mut self, cards: &Vec<Card>) {
+        self.hand = self
+            .hand
+            .iter()
+            .filter(|card| !cards.contains(card))
+            .map(|c| *c)
+            .collect();
     }
 }
