@@ -1,5 +1,6 @@
 use crate::card::{Card, CardSuit, CardValue};
-use rand::prelude::SliceRandom;
+use crate::error::RegicideError;
+use rand::prelude::{SliceRandom, ThreadRng};
 use rand::thread_rng;
 use std::collections::VecDeque;
 use std::convert::TryInto;
@@ -19,19 +20,14 @@ pub struct Enemy {
     attack: u8,
 }
 
-#[derive(Debug)]
-pub enum EnemyError {
-    NotAnEnemy(Card),
-}
-
 impl Enemy {
-    fn new(card: Card) -> Result<Enemy, EnemyError> {
+    fn new(card: Card) -> Result<Enemy, RegicideError> {
         use CardValue::*;
         let health = match card.value {
             Jack => 20,
             Queen => 30,
             King => 40,
-            _ => return Err(EnemyError::NotAnEnemy(card)),
+            _ => return Err(RegicideError::NotAnEnemy(card)),
         };
         Ok(Self {
             card,
@@ -68,22 +64,40 @@ impl Enemy {
 }
 
 impl Table {
-    pub fn new(n_jesters: u8) -> Self {
+    pub fn new(n_jesters: u8) -> Result<Self, RegicideError> {
         let mut rng = thread_rng();
 
-        let castle_deck = CardValue::royals()
+        let castle_deck = Self::castle_deck(&mut rng)?;
+        let tavern_deck = Self::tavern_deck(&mut rng, n_jesters);
+        let attack_cards = vec![];
+
+        // We can at most have all the cards in the deck in the discard pile
+        let discard_pile = Vec::with_capacity(tavern_deck.len() + castle_deck.len());
+
+        Ok(Table {
+            castle_deck,
+            tavern_deck,
+            discard_pile,
+            attack_cards,
+        })
+    }
+
+    fn castle_deck(rng: &mut ThreadRng) -> Result<Vec<Enemy>, RegicideError> {
+        CardValue::royals()
             .iter()
             .flat_map(|value| {
                 let mut level = CardSuit::all()
                     .iter()
                     .map(|suit| Card::new(*suit, *value))
-                    .map(|card| Enemy::new(card).unwrap())
-                    .collect::<Vec<Enemy>>();
-                level.shuffle(&mut rng);
+                    .map(|card| Enemy::new(card))
+                    .collect::<Vec<Result<Enemy, RegicideError>>>();
+                level.shuffle(rng);
                 level
             })
-            .collect::<Vec<Enemy>>();
+            .collect()
+    }
 
+    fn tavern_deck(rng: &mut ThreadRng, n_jesters: u8) -> VecDeque<Card> {
         let mut tavern_deck = CardValue::numbers()
             .iter()
             .flat_map(|value| {
@@ -100,19 +114,8 @@ impl Table {
             n_jesters.into()
         ]);
 
-        tavern_deck.shuffle(&mut rng);
-
-        let tavern_deck = VecDeque::from(tavern_deck);
-
-        // We can at most have all the cards in the deck in the discard pile
-        let discard_pile = Vec::with_capacity(tavern_deck.len() + castle_deck.len());
-        let attack_cards = vec![];
-        Self {
-            castle_deck,
-            tavern_deck,
-            discard_pile,
-            attack_cards,
-        }
+        tavern_deck.shuffle(rng);
+        VecDeque::from(tavern_deck)
     }
 
     pub fn draw_cards(&mut self, n_cards: u8) -> Vec<Card> {

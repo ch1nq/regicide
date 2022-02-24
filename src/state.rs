@@ -1,11 +1,10 @@
 use crate::card::{Card, CardSuit};
+use crate::error::RegicideError;
 use crate::game::{Action, GameResult, GameStatus};
 use crate::player::{Player, PlayerId};
 use crate::table::{Enemy, Table};
 use itertools::Itertools;
 use std::cmp::Ordering;
-use std::error::Error;
-use std::fmt::Formatter;
 
 #[derive(Debug, Clone)]
 pub struct State {
@@ -17,30 +16,16 @@ pub struct State {
     must_discard: Option<u8>,
 }
 
-#[derive(Debug)]
-pub enum StateError {
-    WrongNumberOfPlayers,
-    NotAnEnemy(Card),
-}
-
-impl std::fmt::Display for StateError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format!("{:?})", self))
-    }
-}
-
-impl Error for StateError {}
-
 impl State {
-    pub fn new(n_players: usize) -> Result<Self, StateError> {
+    pub fn new(n_players: usize) -> Result<Self, RegicideError> {
         let (n_jesters, max_hand_size) = match n_players {
             1 => (0, 8),
             2 => (0, 7),
             3 => (1, 6),
             4 => (2, 5),
-            _ => return Err(StateError::WrongNumberOfPlayers),
+            _ => return Err(RegicideError::WrongNumberOfPlayers),
         };
-        let mut table = Table::new(n_jesters);
+        let mut table = Table::new(n_jesters)?;
         let players = (0..n_players)
             .map(|id| Player::new(id, table.draw_cards(max_hand_size)))
             .collect();

@@ -1,4 +1,5 @@
 mod card;
+mod error;
 mod game;
 mod player;
 mod state;
