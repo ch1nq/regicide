@@ -1,8 +1,9 @@
-use crate::card::{Card, CardSuit};
+use crate::card::{AttackSum, Card, CardSuit, CardValue};
+use crate::enemy::Enemy;
 use crate::error::RegicideError;
 use crate::game::{Action, GameResult, GameStatus};
 use crate::player::{Player, PlayerId};
-use crate::table::{Enemy, Table};
+use crate::table::Table;
 use itertools::Itertools;
 use std::cmp::Ordering;
 
@@ -86,61 +87,90 @@ impl State {
         use crate::card::CardSuit::*;
 
         // Step 1: Play a card from hand to attack the enemy
-        let mut attack_value: u16 = cards.iter().map(|c| c.attack_value()).sum();
+        let mut attack_value: u16 = cards.attack_sum();
+
+        // Apply jester
+        if cards.contains(&Card::new(None, CardValue::Jester)) {
+            let prior_spades_played = self
+                .table
+                .attack_cards()
+                .iter()
+                .filter(|card| card.suit == Spades)
+                .collect_vec()
+                .attack_sum();
+            if let Some(enemy) = self.table.current_enemy_mut() {
+                // If the Jester is played against a spades enemy,
+                // spades played prior to the Jester will begin reducing
+                // the attack value of the enemy
+                if !enemy.jester_applied() && enemy.card().suit == Spades {
+                    enemy.decrease_attack(prior_spades_played);
+                }
+                enemy.apply_jester();
+            }
+        }
 
         self.table.add_attack_cards(&cards);
 
         // Step 2: Activate the played card’s suit power
-        let suits: Vec<CardSuit> = cards.iter().map(|c| c.suit).collect();
 
+        let suits: Vec<CardSuit> = cards.iter().map(|c| c.suit).collect();
         let enemy_suit = match self.current_enemy() {
             Some(enemy) => enemy.card().suit,
             _ => CardSuit::None,
         };
+        let jester_applied = match self.current_enemy() {
+            Some(enemy) => enemy.jester_applied(),
+            _ => true,
+        };
 
-        // Shield against enemy attack: During Step 4, reduce the attack
-        // value of the current enemy by the attack value played. The shield effects
-        // of spades are cumulative for all spades played against this enemy by any
-        // player, and remain in effect until the enemy is defeated.
-        if suits.contains(&Spades) && enemy_suit != Spades {
-            if let Some(enemy) = self.table.current_enemy_mut() {
-                enemy.decrease_attack(attack_value);
-            }
-        }
-
-        // Heal from the discard: Shuffle the discard pile then count
-        // out a number of cards facedown equal to the attack value played. Place
-        // them under the Tavern deck (no peeking!) then, return the discard pile
-        // to the table, faceup.
-        if suits.contains(&Hearts) && enemy_suit != Hearts {
-            self.table.heal_from_discard(attack_value as u8)
-        }
-
-        // Draw cards: The current player draws a card. The other players follow
-        // in clockwise order drawing one card at a time until a number of cards
-        // equal to the attack value played have been drawn. Players that have
-        // reached their maximum hand size are skipped. Players may never draw cards
-        // over their maximum hand size. There is no penalty for failing to draw
-        // cards from an empty Tavern deck.
-        if suits.contains(&Diamonds) && enemy_suit != Diamonds {
-            for i in 0..attack_value {
-                for offset in 0..self.players.len() as u16 {
-                    let index = ((i + offset) % self.players.len() as u16) as usize;
-                    let player = self.players.get_mut(index).unwrap();
-                    if (player.hand.len()) < self.max_hand_size as usize {
-                        let mut card = self.table.draw_cards(1);
-                        player.hand.append(&mut card);
-                        break;
+        for suit in [Spades, Hearts, Diamonds, Clubs].iter() {
+            if suits.contains(suit) && (&enemy_suit != suit || jester_applied) {
+                match suit {
+                    // Shield against enemy attack: During Step 4, reduce the attack
+                    // value of the current enemy by the attack value played. The shield effects
+                    // of spades are cumulative for all spades played against this enemy by any
+                    // player, and remain in effect until the enemy is defeated.
+                    Spades => {
+                        if let Some(enemy) = self.table.current_enemy_mut() {
+                            enemy.decrease_attack(attack_value);
+                        }
                     }
+
+                    // Heal from the discard: Shuffle the discard pile then count
+                    // out a number of cards facedown equal to the attack value played. Place
+                    // them under the Tavern deck (no peeking!) then, return the discard pile
+                    // to the table, faceup.
+                    Hearts => self.table.heal_from_discard(attack_value as u8),
+
+                    // Draw cards: The current player draws a card. The other players follow
+                    // in clockwise order drawing one card at a time until a number of cards
+                    // equal to the attack value played have been drawn. Players that have
+                    // reached their maximum hand size are skipped. Players may never draw cards
+                    // over their maximum hand size. There is no penalty for failing to draw
+                    // cards from an empty Tavern deck.
+                    Diamonds => {
+                        for i in 0..attack_value {
+                            for offset in 0..self.players.len() as u16 {
+                                let index = ((i + offset) % self.players.len() as u16) as usize;
+                                let player = self.players.get_mut(index).unwrap();
+                                if (player.hand.len()) < self.max_hand_size as usize {
+                                    let mut card = self.table.draw_cards(1);
+                                    player.hand.append(&mut card);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Double damage: During Step 3, damage dealt by clubs counts
+                    // for double. E.g., The 8 of Clubs deals 16 damage.
+                    Clubs => {
+                        attack_value *= 2;
+                    }
+                    _ => {}
                 }
             }
         }
-
-        // Double damage: During Step 3, damage dealt by clubs counts
-        // for double. E.g., The 8 of Clubs deals 16 damage.
-        if suits.contains(&Clubs) && enemy_suit != Clubs {
-            attack_value *= 2;
-        };
 
         // Step 3: Deal damage and check to see if the enemy is defeated
         match self.table.current_enemy_mut() {
@@ -213,7 +243,7 @@ impl State {
                     .iter()
                     .combinations(n_cards + 1)
                     .filter(|cards| {
-                        let card_sum = cards.iter().map(|c| c.attack_value()).sum::<u16>();
+                        let card_sum = cards.attack_sum();
 
                         card_sum >= discard_amount as u16
                     })
@@ -258,7 +288,7 @@ impl State {
             let combos = [2, 3, 4]
                 .iter()
                 .flat_map(|len| same_value_cards.iter().combinations(*len))
-                .filter(|combo| combo.iter().map(|c| c.attack_value()).sum::<u16>() < 10)
+                .filter(|combo| combo.iter().map(|c| **c).collect_vec().attack_sum() < 10)
                 .map(|combo| match combo[..] {
                     [c1, c2] => Action::Combo2(**c1, **c2),
                     [c1, c2, c3] => Action::Combo3(**c1, **c2, **c3),

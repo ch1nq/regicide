@@ -1,9 +1,9 @@
 use crate::card::{Card, CardSuit, CardValue};
+use crate::enemy::Enemy;
 use crate::error::RegicideError;
 use rand::prelude::{SliceRandom, ThreadRng};
 use rand::thread_rng;
 use std::collections::VecDeque;
-use std::convert::TryInto;
 
 #[derive(Debug, Clone)]
 pub struct Table {
@@ -11,56 +11,6 @@ pub struct Table {
     tavern_deck: VecDeque<Card>,
     discard_pile: Vec<Card>,
     attack_cards: Vec<Card>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Enemy {
-    card: Card,
-    health: i8,
-    attack: u8,
-}
-
-impl Enemy {
-    fn new(card: Card) -> Result<Enemy, RegicideError> {
-        use CardValue::*;
-        let health = match card.value {
-            Jack => 20,
-            Queen => 30,
-            King => 40,
-            _ => return Err(RegicideError::NotAnEnemy(card)),
-        };
-        Ok(Self {
-            card,
-            health,
-            attack: card.attack_value() as u8,
-        })
-    }
-
-    pub fn attack_value(&self) -> u8 {
-        self.attack
-    }
-
-    pub fn health(&self) -> i8 {
-        self.health
-    }
-
-    pub fn card(&self) -> &Card {
-        &self.card
-    }
-
-    pub fn take_damage(&mut self, amount: u16) {
-        self.health = self
-            .health
-            .checked_sub(amount.try_into().expect("That's a lot of damage!"))
-            .unwrap_or(-1);
-    }
-
-    pub fn decrease_attack(&mut self, by: u16) {
-        self.attack = self
-            .attack
-            .checked_sub(by.try_into().expect("That's a lot of damage!"))
-            .unwrap_or(0);
-    }
 }
 
 impl Table {
@@ -130,6 +80,10 @@ impl Table {
 
     pub fn add_attack_cards(&mut self, cards: &Vec<Card>) {
         self.attack_cards.extend(cards.iter());
+    }
+
+    pub fn attack_cards(&self) -> &Vec<Card> {
+        &self.attack_cards
     }
 
     /// Place all cards played by players against the enemy in the discard pile.

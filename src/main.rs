@@ -1,4 +1,5 @@
 mod card;
+mod enemy;
 mod error;
 mod game;
 mod player;

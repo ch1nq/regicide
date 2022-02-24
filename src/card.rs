@@ -20,6 +20,24 @@ impl CardSuit {
     }
 }
 
+pub trait AttackValue: Sized + Copy {
+    fn attack_value(&self) -> u16;
+}
+
+/// Shorthand for getting the sum of all attack values from a vec
+pub trait AttackSum {
+    fn attack_sum(&self) -> u16;
+}
+
+impl<T> AttackSum for Vec<T>
+where
+    T: AttackValue,
+{
+    fn attack_sum(&self) -> u16 {
+        self.iter().map(|card| card.attack_value()).sum()
+    }
+}
+
 impl PartialOrd for CardSuit {
     /// The ordering implemented is arbitrary and does not carry any meaning
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -68,8 +86,10 @@ impl Card {
     pub fn new(suit: CardSuit, value: CardValue) -> Self {
         Self { suit, value }
     }
+}
 
-    pub fn attack_value(&self) -> u16 {
+impl AttackValue for Card {
+    fn attack_value(&self) -> u16 {
         use CardValue::*;
         match self.value {
             Jester => 0,
@@ -87,5 +107,11 @@ impl Card {
             Queen => 15,
             King => 20,
         }
+    }
+}
+
+impl<'a> AttackValue for &'a Card {
+    fn attack_value(&self) -> u16 {
+        (*self).attack_value()
     }
 }

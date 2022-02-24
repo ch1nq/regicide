@@ -1,4 +1,4 @@
-use crate::card::Card;
+use crate::card::{AttackSum, Card};
 
 #[derive(Debug, Clone)]
 pub struct PlayerId(pub usize);
@@ -24,6 +24,6 @@ impl Player {
     }
 
     pub fn total_hand_value(&self) -> u16 {
-        self.hand.iter().map(|card| card.attack_value()).sum()
+        self.hand.attack_sum()
     }
 }
