@@ -1,4 +1,4 @@
-use crate::card::{AttackSum, Card};
+use super::card::{AttackSum, Card};
 
 #[derive(Debug, Clone)]
 pub struct PlayerId(pub usize);

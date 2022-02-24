@@ -1,5 +1,11 @@
-use crate::card::Card;
-use crate::state::State;
+pub mod card;
+mod enemy;
+mod player;
+pub mod state;
+mod table;
+
+use card::Card;
+use state::State;
 
 #[derive(Debug)]
 pub enum GameResult {

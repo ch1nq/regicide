@@ -1,4 +1,4 @@
-use crate::card::Card;
+use crate::game::card::Card;
 use std::error::Error;
 use std::fmt::Formatter;
 

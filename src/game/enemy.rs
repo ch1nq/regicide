@@ -1,4 +1,4 @@
-use crate::card::{AttackValue, Card, CardValue};
+use super::card::{AttackValue, Card, CardValue};
 use crate::error::RegicideError;
 use std::convert::TryInto;
 

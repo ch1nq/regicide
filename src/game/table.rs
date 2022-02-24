@@ -1,5 +1,5 @@
-use crate::card::{Card, CardSuit, CardValue};
-use crate::enemy::Enemy;
+use super::card::{Card, CardSuit, CardValue};
+use super::enemy::Enemy;
 use crate::error::RegicideError;
 use rand::prelude::{SliceRandom, ThreadRng};
 use rand::thread_rng;

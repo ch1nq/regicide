@@ -1,9 +1,9 @@
-use crate::card::{AttackSum, Card, CardSuit, CardValue};
-use crate::enemy::Enemy;
+use super::card::{AttackSum, Card, CardSuit, CardValue};
+use super::enemy::Enemy;
+use super::player::{Player, PlayerId};
+use super::table::Table;
 use crate::error::RegicideError;
 use crate::game::{Action, GameResult, GameStatus};
-use crate::player::{Player, PlayerId};
-use crate::table::Table;
 use itertools::Itertools;
 use std::cmp::Ordering;
 
@@ -84,7 +84,7 @@ impl State {
     }
 
     fn play_cards(mut self, cards: Vec<Card>) -> GameStatus {
-        use crate::card::CardSuit::*;
+        use super::card::CardSuit::*;
 
         // Step 1: Play a card from hand to attack the enemy
         let mut attack_value: u16 = cards.attack_sum();
@@ -255,7 +255,7 @@ impl State {
     }
 
     fn attack_actions(&self, player: &Player) -> Vec<Action> {
-        use crate::card::CardValue::*;
+        use super::card::CardValue::*;
 
         // Single card actions
         let mut actions: Vec<Action> = player.hand.iter().map(|card| Action::Play(*card)).collect();
