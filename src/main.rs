@@ -21,10 +21,10 @@ fn main() {
 }
 
 fn random_playout() -> GameResult {
-    let mut state = state::State::new(1).unwrap();
+    let mut rng = thread_rng();
+    let mut state = state::State::new(3).unwrap();
 
     loop {
-        let mut rng = thread_rng();
         let actions = state.get_action_space();
         let action = actions.choose(&mut rng).unwrap();
         match state.take_action(action) {

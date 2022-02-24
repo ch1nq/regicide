@@ -3,6 +3,7 @@ use crate::game::{Action, GameResult, GameStatus};
 use crate::player::{Player, PlayerId};
 use crate::table::{Enemy, Table};
 use itertools::Itertools;
+use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt::Formatter;
 
@@ -60,7 +61,18 @@ impl State {
     }
 
     fn apply_action(mut self, action: &Action) -> GameStatus {
+        self.times_yielded = match action {
+            Action::Discard(_) => self.times_yielded,
+            Action::Yield => self.times_yielded + 1,
+            _ => 0,
+        };
+
         match action {
+            Action::Play(c) => self.play_cards(vec![*c]),
+            Action::AnimalCombo(c1, c2) => self.play_cards(vec![*c1, *c2]),
+            Action::Combo2(c1, c2) => self.play_cards(vec![*c1, *c2]),
+            Action::Combo3(c1, c2, c3) => self.play_cards(vec![*c1, *c2, *c3]),
+            Action::Combo4(c1, c2, c3, c4) => self.play_cards(vec![*c1, *c2, *c3, *c4]),
             Action::Discard(discard_cards) => {
                 self.current_player_mut().hand = self
                     .current_player_mut()
@@ -75,38 +87,37 @@ impl State {
                 GameStatus::InProgress(self)
             }
             Action::Yield => {
-                // All players cannot yield consequtively
                 if self.times_yielded < self.players.len() {
-                    GameStatus::HasEnded(GameResult::Lost)
-                } else {
-                    self.times_yielded += 1;
                     self.play_cards(vec![])
+                } else {
+                    // All players cannot yield consequtively
+                    GameStatus::HasEnded(GameResult::Lost)
                 }
             }
-            Action::Play(c) => self.play_cards(vec![*c]),
-            Action::AnimalCombo(c1, c2) => self.play_cards(vec![*c1, *c2]),
-            Action::Combo2(c1, c2) => self.play_cards(vec![*c1, *c2]),
-            Action::Combo3(c1, c2, c3) => self.play_cards(vec![*c1, *c2, *c3]),
-            Action::Combo4(c1, c2, c3, c4) => self.play_cards(vec![*c1, *c2, *c3, *c4]),
         }
     }
 
     fn play_cards(mut self, cards: Vec<Card>) -> GameStatus {
+        use crate::card::CardSuit::*;
+
         // Step 1: Play a card from hand to attack the enemy
         let mut attack_value: u16 = cards.iter().map(|c| c.attack_value()).sum();
 
         self.table.add_attack_cards(&cards);
 
-        // TODO: Handle yielding
-
         // Step 2: Activate the played card’s suit power
         let suits: Vec<CardSuit> = cards.iter().map(|c| c.suit).collect();
+
+        let enemy_suit = match self.current_enemy() {
+            Some(enemy) => enemy.card().suit,
+            _ => CardSuit::None,
+        };
 
         // Shield against enemy attack: During Step 4, reduce the attack
         // value of the current enemy by the attack value played. The shield effects
         // of spades are cumulative for all spades played against this enemy by any
         // player, and remain in effect until the enemy is defeated.
-        if suits.contains(&CardSuit::Spades) {
+        if suits.contains(&Spades) && enemy_suit != Spades {
             if let Some(enemy) = self.table.current_enemy_mut() {
                 enemy.decrease_attack(attack_value);
             }
@@ -116,17 +127,17 @@ impl State {
         // out a number of cards facedown equal to the attack value played. Place
         // them under the Tavern deck (no peeking!) then, return the discard pile
         // to the table, faceup.
-        if suits.contains(&CardSuit::Hearts) {
+        if suits.contains(&Hearts) && enemy_suit != Hearts {
             self.table.heal_from_discard(attack_value as u8)
         }
 
-        // The current player draws a card. The other players follow
+        // Draw cards: The current player draws a card. The other players follow
         // in clockwise order drawing one card at a time until a number of cards
         // equal to the attack value played have been drawn. Players that have
         // reached their maximum hand size are skipped. Players may never draw cards
         // over their maximum hand size. There is no penalty for failing to draw
         // cards from an empty Tavern deck.
-        if suits.contains(&CardSuit::Diamonds) {
+        if suits.contains(&Diamonds) && enemy_suit != Diamonds {
             for i in 0..attack_value {
                 for offset in 0..self.players.len() as u16 {
                     let index = ((i + offset) % self.players.len() as u16) as usize;
@@ -142,7 +153,7 @@ impl State {
 
         // Double damage: During Step 3, damage dealt by clubs counts
         // for double. E.g., The 8 of Clubs deals 16 damage.
-        if suits.contains(&CardSuit::Clubs) {
+        if suits.contains(&Clubs) && enemy_suit != Clubs {
             attack_value *= 2;
         };
 
@@ -151,8 +162,8 @@ impl State {
             Some(enemy) => {
                 enemy.take_damage(attack_value);
 
-                use std::cmp::Ordering;
                 let enemy_card = *enemy.card();
+
                 match enemy.health().cmp(&0) {
                     Ordering::Less => {
                         self.table.discard_card(enemy_card);
@@ -168,18 +179,23 @@ impl State {
                     }
                     Ordering::Greater => {
                         // Step 4: Suffer damage from the enemy by discarding cards
-                        let attack = enemy.attack_value();
-                        let health = self.current_player().total_hand_value();
-                        if attack as u16 > health {
+                        let enemy_attack = enemy.attack_value();
+                        let player_health = self.current_player().total_hand_value();
+
+                        if enemy_attack as u16 > player_health {
                             GameStatus::HasEnded(GameResult::Lost)
                         } else {
-                            self.must_discard = Some(attack);
+                            // Player only needs to discard if they take damage
+                            self.must_discard = match enemy_attack {
+                                0 => Option::None,
+                                _ => Some(enemy_attack),
+                            };
                             GameStatus::InProgress(self)
                         }
                     }
                 }
             }
-            None => GameStatus::HasEnded(GameResult::Won),
+            Option::None => GameStatus::HasEnded(GameResult::Won),
         }
     }
 
@@ -193,6 +209,15 @@ impl State {
 
     pub fn current_enemy(&self) -> Option<&Enemy> {
         self.table.current_enemy()
+    }
+
+    pub fn get_action_space(&self) -> Vec<Action> {
+        let player = self.current_player();
+
+        match self.must_discard {
+            Some(discard_amount) => self.discard_actions(player, discard_amount),
+            None => self.attack_actions(player),
+        }
     }
 
     fn discard_actions(&self, player: &Player, discard_amount: u8) -> Vec<Action> {
@@ -260,14 +285,5 @@ impl State {
 
         actions.push(Action::Yield);
         actions
-    }
-
-    pub fn get_action_space(&self) -> Vec<Action> {
-        let player = self.current_player();
-
-        match self.must_discard {
-            Some(discard_amount) => self.discard_actions(player, discard_amount),
-            None => self.attack_actions(player),
-        }
     }
 }
