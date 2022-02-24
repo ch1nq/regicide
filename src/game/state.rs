@@ -14,7 +14,6 @@ pub struct State {
     has_turn: PlayerId,
     times_yielded: usize,
     max_hand_size: u8,
-    // must_discard: Option<u8>,
     action_type: ActionType,
 }
 
@@ -45,7 +44,6 @@ impl State {
             has_turn: PlayerId(0),
             times_yielded: 0,
             max_hand_size,
-            // must_discard: None,
             action_type: ActionType::PlayCards,
         })
     }
@@ -81,7 +79,6 @@ impl State {
                     .map(|c| *c)
                     .collect();
 
-                // self.must_discard = None;
                 self.action_type = ActionType::PlayCards;
                 self.next_player();
                 GameStatus::InProgress(self)
