@@ -11,10 +11,10 @@ use state::State;
 
 use self::player::PlayerId;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub enum GameResult {
     Won,
-    Lost,
+    Lost(u8),
 }
 #[derive(Debug)]
 pub enum GameStatus {

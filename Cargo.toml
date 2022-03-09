@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 rand = "0.8.5"
 itertools = "0.10.2"
+mcts = "0.3.0"

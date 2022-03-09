@@ -5,7 +5,7 @@ use rand::prelude::{SliceRandom, ThreadRng};
 use rand::thread_rng;
 use std::collections::VecDeque;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Table {
     castle_deck: Vec<Enemy>,
     tavern_deck: VecDeque<Card>,

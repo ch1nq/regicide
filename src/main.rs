@@ -8,16 +8,7 @@ use regicide_rl::game::state;
 use regicide_rl::game::{GameResult, GameStatus};
 
 fn main() {
-    // let n_tries = 100;
-    // let wins = (0..n_tries)
-    //     .map(|_| random_playout())
-    //     .filter(|r| match r {
-    //         GameResult::Won => true,
-    //         _ => false,
-    //     })
-    //     .count();
-    // println!("{}/{} wins", wins, n_tries);
-    let result = input_playout();
+    let result = mcts_playout();
     dbg!(result);
 }
 
@@ -29,6 +20,53 @@ fn random_playout() -> GameResult {
         let actions = state.get_action_space();
         let action = actions.choose(&mut rng).unwrap();
         match state.take_action(action) {
+            GameStatus::InProgress(new_state) => {
+                state = new_state;
+            }
+            GameStatus::HasEnded(result) => {
+                return result;
+            }
+        };
+    }
+}
+
+use mcts::transposition_table::ApproxTable;
+use mcts::tree_policy::UCTPolicy;
+use mcts::MCTSManager;
+use state::{MyEvaluator, MyMCTS};
+
+fn mcts_playout() -> GameResult {
+    let mut state = state::State::new(2).unwrap();
+
+    loop {
+        let mut mcts = MCTSManager::new(
+            state.clone(),
+            MyMCTS,
+            MyEvaluator,
+            // MyEvaluator(state.current_player()),
+            UCTPolicy::new(4.4),
+            // ApproxTable::new(2.pow(11)),
+            ApproxTable::new(2 << 24),
+        );
+
+        println!("{}", state);
+
+        // mcts.playout_n(100_000);
+        mcts.playout_n_parallel(1_000_000, 8);
+
+        // mcts.tree().debug_moves();
+        // println!();
+
+        let resulting_action = mcts.principal_variation(1);
+        let action = resulting_action
+            .first()
+            .expect("Could not find action")
+            .clone();
+
+        println!("{:?}", action);
+        println!();
+
+        match state.take_action(&action) {
             GameStatus::InProgress(new_state) => {
                 state = new_state;
             }

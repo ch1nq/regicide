@@ -2,12 +2,16 @@ use super::card::{AttackSum, Card, CardSuit, CardValue};
 use super::enemy::Enemy;
 use super::player::{Player, PlayerId};
 use super::table::Table;
+use super::Game;
 use crate::error::RegicideError;
 use crate::game::{Action, GameResult, GameStatus};
 use itertools::Itertools;
+use rand::prelude::SliceRandom;
 use std::cmp::Ordering;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct State {
     table: Table,
     pub players: Vec<Player>,
@@ -15,9 +19,11 @@ pub struct State {
     times_yielded: usize,
     max_hand_size: u8,
     action_type: ActionType,
+    has_ended: Option<GameResult>,
+    level: u8,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 enum ActionType {
     PlayCards,
     Discard(u8),
@@ -45,6 +51,8 @@ impl State {
             times_yielded: 0,
             max_hand_size,
             action_type: ActionType::PlayCards,
+            has_ended: None,
+            level: 0,
         })
     }
 
@@ -88,7 +96,7 @@ impl State {
                     self.play_cards(vec![])
                 } else {
                     // All players cannot yield consequtively
-                    GameStatus::HasEnded(GameResult::Lost)
+                    GameStatus::HasEnded(GameResult::Lost(self.level))
                 }
             }
             Action::ChangePlayer(id) => {
@@ -174,7 +182,7 @@ impl State {
                                 let player = self.players.get_mut(index).unwrap();
                                 if (player.hand.len()) < self.max_hand_size as usize {
                                     let mut card = self.table.draw_cards(1);
-                                    println!("Draw {:?} => {:?}", &card, &player);
+                                    // println!("Draw {:?} => {:?}", &card, &player);
                                     player.hand.append(&mut card);
                                     break;
                                 }
@@ -204,12 +212,14 @@ impl State {
                         self.table.discard_card(enemy_card);
                         self.table.discard_attack_cards();
                         self.table.next_enemy();
+                        self.level += 1;
                         GameStatus::InProgress(self)
                     }
                     Ordering::Equal => {
                         self.table.add_to_top_of_tavern_deck(enemy_card);
                         self.table.discard_attack_cards();
                         self.table.next_enemy();
+                        self.level += 1;
                         GameStatus::InProgress(self)
                     }
                     Ordering::Greater => {
@@ -220,7 +230,7 @@ impl State {
                         if self.action_type == ActionType::Jester {
                             GameStatus::InProgress(self)
                         } else if enemy_attack as u16 > player_health {
-                            GameStatus::HasEnded(GameResult::Lost)
+                            GameStatus::HasEnded(GameResult::Lost(self.level))
                         } else {
                             // Player only needs to discard if they take damage
                             self.action_type = match enemy_attack {
@@ -241,6 +251,7 @@ impl State {
 
     fn next_player(&mut self) {
         self.has_turn = self.has_turn.next_id(self.players.len());
+        // self.level += 0.1;
     }
 
     fn current_player_mut(&mut self) -> &mut Player {
@@ -337,5 +348,131 @@ impl State {
 
         actions.push(Action::Yield);
         actions
+    }
+}
+
+use mcts::{CycleBehaviour, Evaluator, GameState, MoveEvaluation, SearchHandle, MCTS};
+
+impl GameState for State {
+    type Move = Action;
+    type Player = Player;
+    type MoveList = Vec<Action>;
+
+    fn current_player(&self) -> Self::Player {
+        self.current_player().clone()
+    }
+    fn available_moves(&self) -> Vec<Self::Move> {
+        self.get_action_space()
+    }
+    fn make_move(&mut self, action: &Self::Move) {
+        match self.clone().apply_action(action) {
+            GameStatus::InProgress(state) => {
+                *self = state;
+            }
+            GameStatus::HasEnded(result) => {
+                self.has_ended = Some(result);
+            }
+        };
+    }
+}
+
+impl TranspositionHash for State {
+    fn hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        Hash::hash(&self, &mut hasher);
+        hasher.finish()
+    }
+}
+
+pub struct MyEvaluator;
+
+impl Evaluator<MyMCTS> for MyEvaluator {
+    type StateEvaluation = GameResult;
+
+    // Random default policy
+    fn evaluate_new_state(
+        &self,
+        state: &State,
+        moves: &Vec<Action>,
+        _: Option<SearchHandle<MyMCTS>>,
+    ) -> (Vec<MoveEvaluation<MyMCTS>>, GameResult) {
+        let mut node = state.clone();
+        let mut rand = rand::thread_rng();
+        let result;
+        loop {
+            let moves = node.available_moves();
+            match moves.choose(&mut rand) {
+                Some(random_action) => match node.apply_action(random_action) {
+                    GameStatus::InProgress(state) => {
+                        if let Some(res) = state.has_ended {
+                            result = res;
+                            break;
+                        } else {
+                            node = state.clone();
+                        }
+                    }
+                    GameStatus::HasEnded(res) => {
+                        result = res;
+                        break;
+                    }
+                },
+                None => {
+                    result = GameResult::Lost(node.level);
+                    break;
+                }
+            }
+        }
+        (vec![(); moves.len()], result)
+    }
+    fn evaluate_existing_state(
+        &self,
+        _: &State,
+        evaln: &GameResult,
+        _: SearchHandle<MyMCTS>,
+    ) -> GameResult {
+        *evaln
+    }
+    fn interpret_evaluation_for_player(&self, evaln: &GameResult, _player: &Player) -> i64 {
+        match evaln {
+            GameResult::Won => 20_i64,
+            GameResult::Lost(level) => *level as i64,
+        }
+    }
+}
+use mcts::transposition_table::{ApproxTable, TranspositionHash};
+use mcts::tree_policy::UCTPolicy;
+
+#[derive(Default)]
+pub struct MyMCTS;
+
+impl MCTS for MyMCTS {
+    type State = State;
+    type Eval = MyEvaluator;
+    type NodeData = ();
+    type ExtraThreadData = ();
+    type TreePolicy = UCTPolicy;
+    type TranspositionTable = ApproxTable<Self>;
+
+    fn cycle_behaviour(&self) -> CycleBehaviour<Self> {
+        CycleBehaviour::UseCurrentEvalWhenCycleDetected
+    }
+}
+
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // self.table: Table
+        // self.pub players: Vec<Player>
+        // self.has_turn: PlayerId
+        // self.times_yielded: usize
+        // self.max_hand_size: u8
+        // self.action_type: ActionType
+        write!(
+            f,
+            "{}{}{}",
+            format!("Player: {:?}\n", self.has_turn()),
+            format!("Hand:   {:?}\n", self.current_player().hand),
+            format!("Enemy:  {:?}", self.current_enemy()),
+            // format!("{}", self.table),
+        )
     }
 }
