@@ -2,11 +2,11 @@ use super::card::{AttackSum, Card, CardSuit, CardValue};
 use super::enemy::Enemy;
 use super::player::{Player, PlayerId};
 use super::table::Table;
-use super::Game;
 use crate::error::RegicideError;
 use crate::game::{Action, GameResult, GameStatus};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
+use rand::rngs::ThreadRng;
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -96,7 +96,7 @@ impl State {
                     self.play_cards(vec![])
                 } else {
                     // All players cannot yield consequtively
-                    GameStatus::HasEnded(GameResult::Lost(self.level))
+                    GameStatus::HasEnded(GameResult::Lost(self.reward()))
                 }
             }
             Action::ChangePlayer(id) => {
@@ -230,7 +230,7 @@ impl State {
                         if self.action_type == ActionType::Jester {
                             GameStatus::InProgress(self)
                         } else if enemy_attack as u16 > player_health {
-                            GameStatus::HasEnded(GameResult::Lost(self.level))
+                            GameStatus::HasEnded(GameResult::Lost(self.reward()))
                         } else {
                             // Player only needs to discard if they take damage
                             self.action_type = match enemy_attack {
@@ -251,7 +251,14 @@ impl State {
 
     fn next_player(&mut self) {
         self.has_turn = self.has_turn.next_id(self.players.len());
-        // self.level += 0.1;
+    }
+
+    pub fn reward(&self) -> u8 {
+        match self.level {
+            0..=4 => self.level * 2,
+            5..=8 => 8 + (self.level - 4) * 2,
+            _ => 20 + (self.level - 8) * 4,
+        }
     }
 
     fn current_player_mut(&mut self) -> &mut Player {
@@ -349,6 +356,20 @@ impl State {
         actions.push(Action::Yield);
         actions
     }
+
+    pub fn random_permutation(&self, rng: &mut ThreadRng) -> State {
+        let mut new_state = self.clone();
+        let player_hands = new_state
+            .players
+            .iter_mut()
+            .filter(|player| player.id() != self.current_player().id())
+            .map(|player| &mut player.hand)
+            .collect_vec();
+
+        new_state.table.permute(player_hands, rng);
+
+        new_state
+    }
 }
 
 use mcts::{CycleBehaviour, Evaluator, GameState, MoveEvaluation, SearchHandle, MCTS};
@@ -408,7 +429,7 @@ impl Evaluator<MyMCTS> for MyEvaluator {
                             result = res;
                             break;
                         } else {
-                            node = state.clone();
+                            node = state.random_permutation(&mut rand);
                         }
                     }
                     GameStatus::HasEnded(res) => {
@@ -417,7 +438,7 @@ impl Evaluator<MyMCTS> for MyEvaluator {
                     }
                 },
                 None => {
-                    result = GameResult::Lost(node.level);
+                    result = GameResult::Lost(node.reward());
                     break;
                 }
             }
@@ -434,8 +455,8 @@ impl Evaluator<MyMCTS> for MyEvaluator {
     }
     fn interpret_evaluation_for_player(&self, evaln: &GameResult, _player: &Player) -> i64 {
         match evaln {
-            GameResult::Won => 20_i64,
-            GameResult::Lost(level) => *level as i64,
+            GameResult::Won => 36_i64,
+            GameResult::Lost(reward) => *reward as i64,
         }
     }
 }

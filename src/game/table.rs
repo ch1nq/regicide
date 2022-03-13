@@ -1,6 +1,7 @@
 use super::card::{Card, CardSuit, CardValue};
 use super::enemy::Enemy;
 use crate::error::RegicideError;
+use itertools::Itertools;
 use rand::prelude::{SliceRandom, ThreadRng};
 use rand::thread_rng;
 use std::collections::VecDeque;
@@ -17,8 +18,8 @@ impl Table {
     pub fn new(n_jesters: u8) -> Result<Self, RegicideError> {
         let mut rng = thread_rng();
 
-        let castle_deck = Self::castle_deck(&mut rng)?;
-        let tavern_deck = Self::tavern_deck(&mut rng, n_jesters);
+        let castle_deck = Self::new_castle_deck(&mut rng)?;
+        let tavern_deck = Self::new_tavern_deck(&mut rng, n_jesters);
         let attack_cards = vec![];
 
         // We can at most have all the cards in the deck in the discard pile
@@ -32,7 +33,7 @@ impl Table {
         })
     }
 
-    fn castle_deck(rng: &mut ThreadRng) -> Result<Vec<Enemy>, RegicideError> {
+    fn new_castle_deck(rng: &mut ThreadRng) -> Result<Vec<Enemy>, RegicideError> {
         CardValue::royals()
             .iter()
             .flat_map(|value| {
@@ -47,7 +48,7 @@ impl Table {
             .collect()
     }
 
-    fn tavern_deck(rng: &mut ThreadRng, n_jesters: u8) -> VecDeque<Card> {
+    fn new_tavern_deck(rng: &mut ThreadRng, n_jesters: u8) -> VecDeque<Card> {
         let mut tavern_deck = CardValue::numbers()
             .iter()
             .flat_map(|value| {
@@ -114,5 +115,37 @@ impl Table {
     /// Turn the next card of the Castle deck face up.
     pub fn next_enemy(&mut self) {
         self.castle_deck.pop();
+    }
+
+    pub fn permute(&mut self, player_hands: Vec<&mut Vec<Card>>, rng: &mut ThreadRng) {
+        // Shuffle castle deck
+        let castle_deck = Self::new_castle_deck(rng)
+            .unwrap()
+            .iter()
+            .filter(|enemy| self.castle_deck.contains(enemy))
+            .map(|c| *c)
+            .collect_vec();
+        self.castle_deck = castle_deck;
+
+        // Combine all potentially unknown cards into a single pile:
+        // hands + discard pile + tavern deck
+        let discard_pile = self.discard_pile.clone();
+        let tavern_deck = self.tavern_deck.iter().map(|c| *c).collect_vec();
+        let player_cards = player_hands
+            .iter()
+            .flat_map(|hand| hand.iter())
+            .map(|c| *c)
+            .collect_vec();
+        let mut combined_cards = [discard_pile, player_cards, tavern_deck].concat();
+        combined_cards.shuffle(rng);
+
+        // Distribute cards back out
+        for hand in player_hands {
+            *hand = combined_cards.drain(..hand.len()).collect();
+        }
+        self.tavern_deck =
+            VecDeque::from(combined_cards.drain(..self.tavern_deck.len()).collect_vec());
+
+        self.discard_pile = combined_cards;
     }
 }

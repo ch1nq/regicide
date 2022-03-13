@@ -1,6 +1,6 @@
 use super::card::{AttackSum, Card};
 
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq)]
 pub struct PlayerId(pub usize);
 
 impl PlayerId {

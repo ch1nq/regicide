@@ -2,7 +2,7 @@ use super::card::{AttackValue, Card, CardValue};
 use crate::error::RegicideError;
 use std::convert::TryInto;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq)]
 pub struct Enemy {
     card: Card,
     health: i8,
