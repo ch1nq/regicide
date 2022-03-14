@@ -11,7 +11,7 @@ fn main() {
 
 fn _random_playout() -> GameResult {
     let mut rng = thread_rng();
-    let mut state = state::State::new(3).unwrap();
+    let mut state = state::State::new(3, Some(1337)).unwrap();
 
     loop {
         let actions = state.get_action_space();
@@ -33,7 +33,7 @@ use mcts::MCTSManager;
 use state::{MyEvaluator, MyMCTS};
 
 fn mcts_playout() -> GameResult {
-    let mut state = state::State::new(3).unwrap();
+    let mut state = state::State::new(3, Some(1337)).unwrap();
 
     loop {
         let mut mcts = MCTSManager::new(
@@ -49,7 +49,8 @@ fn mcts_playout() -> GameResult {
 
         println!("{}", state);
 
-        mcts.playout_n_parallel(10_000_000, 6);
+        mcts.playout_n(100_000);
+        // mcts.playout_n_parallel(10_000_000, 6);
 
         let resulting_action_info = mcts.principal_variation_info(1);
         let resulting_action = mcts.principal_variation(1);
@@ -75,7 +76,7 @@ fn mcts_playout() -> GameResult {
 }
 
 fn _input_playout() -> GameResult {
-    let mut state = state::State::new(3).unwrap();
+    let mut state = state::State::new(3, Some(1337)).unwrap();
 
     loop {
         let mut input = String::new();

@@ -5,13 +5,14 @@ use super::table::Table;
 use crate::error::RegicideError;
 use crate::game::{Action, GameResult, GameStatus};
 use itertools::Itertools;
-use rand::prelude::SliceRandom;
+use rand::prelude::{SliceRandom, StdRng};
 use rand::rngs::ThreadRng;
+use rand::SeedableRng;
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct State {
     table: Table,
     pub players: Vec<Player>,
@@ -21,6 +22,15 @@ pub struct State {
     action_type: ActionType,
     has_ended: Option<GameResult>,
     level: u8,
+    rng: rand::rngs::StdRng,
+}
+impl Hash for State {
+    fn hash<H>(&self, hasher: &mut H)
+    where
+        H: Hasher,
+    {
+        self.has_turn.hash(hasher);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
@@ -31,7 +41,12 @@ enum ActionType {
 }
 
 impl State {
-    pub fn new(n_players: usize) -> Result<Self, RegicideError> {
+    pub fn new(n_players: usize, seed: Option<u64>) -> Result<Self, RegicideError> {
+        let mut rng = match seed {
+            Some(s) => StdRng::seed_from_u64(s),
+            None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+        };
+
         let (n_jesters, max_hand_size) = match n_players {
             1 => (0, 8),
             2 => (0, 7),
@@ -39,7 +54,7 @@ impl State {
             4 => (2, 5),
             _ => return Err(RegicideError::WrongNumberOfPlayers),
         };
-        let mut table = Table::new(n_jesters)?;
+        let mut table = Table::new(n_jesters, &mut rng)?;
         let players = (0..n_players)
             .map(|id| Player::new(id, table.draw_cards(max_hand_size)))
             .collect();
@@ -53,6 +68,7 @@ impl State {
             action_type: ActionType::PlayCards,
             has_ended: None,
             level: 0,
+            rng,
         })
     }
 
@@ -167,7 +183,9 @@ impl State {
                     // out a number of cards facedown equal to the attack value played. Place
                     // them under the Tavern deck (no peeking!) then, return the discard pile
                     // to the table, faceup.
-                    Hearts => self.table.heal_from_discard(attack_value as u8),
+                    Hearts => self
+                        .table
+                        .heal_from_discard(attack_value as u8, &mut self.rng),
 
                     // Draw cards: The current player draws a card. The other players follow
                     // in clockwise order drawing one card at a time until a number of cards
@@ -357,7 +375,7 @@ impl State {
         actions
     }
 
-    pub fn random_permutation(&self, rng: &mut ThreadRng) -> State {
+    pub fn random_permutation(&self) -> State {
         let mut new_state = self.clone();
         let player_hands = new_state
             .players
@@ -366,7 +384,7 @@ impl State {
             .map(|player| &mut player.hand)
             .collect_vec();
 
-        new_state.table.permute(player_hands, rng);
+        new_state.table.permute(player_hands, &mut new_state.rng);
 
         new_state
     }
@@ -418,7 +436,7 @@ impl Evaluator<MyMCTS> for MyEvaluator {
         _: Option<SearchHandle<MyMCTS>>,
     ) -> (Vec<MoveEvaluation<MyMCTS>>, GameResult) {
         let mut node = state.clone();
-        let mut rand = rand::thread_rng();
+        let mut rand = rand::rngs::StdRng::seed_from_u64(1337);
         let result;
         loop {
             let moves = node.available_moves();
@@ -429,7 +447,7 @@ impl Evaluator<MyMCTS> for MyEvaluator {
                             result = res;
                             break;
                         } else {
-                            node = state.random_permutation(&mut rand);
+                            node = state.random_permutation();
                         }
                     }
                     GameStatus::HasEnded(res) => {

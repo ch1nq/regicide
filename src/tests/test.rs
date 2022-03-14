@@ -1,9 +1,11 @@
 use crate::game::card::{Card, CardSuit::*, CardValue::*};
 use crate::game::Action;
 
+const SEED: u64 = 1337;
+
 #[test]
 fn no_duplicate_animal_combos() {
-    let mut state = crate::game::state::State::new(1).unwrap();
+    let mut state = crate::game::state::State::new(1, Some(SEED)).unwrap();
     state.players[0].hand = vec![
         Card::new(Diamonds, Ace),
         Card::new(Hearts, Ace),
@@ -34,7 +36,7 @@ fn combo_count(actions: &Vec<Action>, variant: &str) -> usize {
 
 #[test]
 fn two_card_combos() {
-    let mut state = crate::game::state::State::new(1).unwrap();
+    let mut state = crate::game::state::State::new(1, Some(SEED)).unwrap();
     state.players[0].hand = vec![Card::new(Diamonds, Two), Card::new(Clubs, Two)];
     let actions = state.get_action_space();
     dbg!(&state.players[0].hand);
@@ -46,7 +48,7 @@ fn two_card_combos() {
 
 #[test]
 fn three_card_combos() {
-    let mut state = crate::game::state::State::new(1).unwrap();
+    let mut state = crate::game::state::State::new(1, Some(SEED)).unwrap();
     state.players[0].hand = vec![
         Card::new(Diamonds, Two),
         Card::new(Clubs, Two),
@@ -62,7 +64,7 @@ fn three_card_combos() {
 
 #[test]
 fn four_card_combos() {
-    let mut state = crate::game::state::State::new(1).unwrap();
+    let mut state = crate::game::state::State::new(1, Some(SEED)).unwrap();
     state.players[0].hand = vec![
         Card::new(Diamonds, Two),
         Card::new(Clubs, Two),

@@ -3,7 +3,7 @@ use super::enemy::Enemy;
 use crate::error::RegicideError;
 use itertools::Itertools;
 use rand::prelude::{SliceRandom, ThreadRng};
-use rand::thread_rng;
+use rand::rngs::StdRng;
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Hash)]
@@ -15,11 +15,9 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(n_jesters: u8) -> Result<Self, RegicideError> {
-        let mut rng = thread_rng();
-
-        let castle_deck = Self::new_castle_deck(&mut rng)?;
-        let tavern_deck = Self::new_tavern_deck(&mut rng, n_jesters);
+    pub fn new(n_jesters: u8, rng: &mut StdRng) -> Result<Self, RegicideError> {
+        let castle_deck = Self::new_castle_deck(rng)?;
+        let tavern_deck = Self::new_tavern_deck(rng, n_jesters);
         let attack_cards = vec![];
 
         // We can at most have all the cards in the deck in the discard pile
@@ -33,7 +31,7 @@ impl Table {
         })
     }
 
-    fn new_castle_deck(rng: &mut ThreadRng) -> Result<Vec<Enemy>, RegicideError> {
+    fn new_castle_deck(rng: &mut StdRng) -> Result<Vec<Enemy>, RegicideError> {
         CardValue::royals()
             .iter()
             .flat_map(|value| {
@@ -48,7 +46,7 @@ impl Table {
             .collect()
     }
 
-    fn new_tavern_deck(rng: &mut ThreadRng, n_jesters: u8) -> VecDeque<Card> {
+    fn new_tavern_deck(rng: &mut StdRng, n_jesters: u8) -> VecDeque<Card> {
         let mut tavern_deck = CardValue::numbers()
             .iter()
             .flat_map(|value| {
@@ -96,8 +94,8 @@ impl Table {
         self.tavern_deck.push_front(card);
     }
 
-    pub fn heal_from_discard(&mut self, n_cards: u8) {
-        self.discard_pile.shuffle(&mut thread_rng());
+    pub fn heal_from_discard(&mut self, n_cards: u8, rng: &mut StdRng) {
+        self.discard_pile.shuffle(rng);
         let mut cards = (0..n_cards)
             .filter_map(|_| self.discard_pile.pop())
             .collect::<VecDeque<Card>>();
@@ -117,7 +115,7 @@ impl Table {
         self.castle_deck.pop();
     }
 
-    pub fn permute(&mut self, player_hands: Vec<&mut Vec<Card>>, rng: &mut ThreadRng) {
+    pub fn permute(&mut self, player_hands: Vec<&mut Vec<Card>>, rng: &mut StdRng) {
         // Shuffle castle deck
         let castle_deck = Self::new_castle_deck(rng)
             .unwrap()
