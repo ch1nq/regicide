@@ -1,5 +1,4 @@
 use super::card::{AttackValue, Card, CardValue};
-use crate::error::RegicideError;
 use std::convert::TryInto;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
@@ -11,20 +10,20 @@ pub struct Enemy {
 }
 
 impl Enemy {
-    pub fn new(card: Card) -> Result<Enemy, RegicideError> {
+    pub fn new(card: Card) -> Enemy {
         use CardValue::*;
         let health = match card.value {
             Jack => 20,
             Queen => 30,
             King => 40,
-            _ => return Err(RegicideError::NotAnEnemy(card)),
+            _ => panic!("{:?} is not an enemy", card),
         };
-        Ok(Self {
+        Self {
             card,
             health,
             attack: card.attack_value() as u8,
             jester_applied: false,
-        })
+        }
     }
 
     pub fn attack_value(&self) -> u8 {

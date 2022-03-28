@@ -1,74 +1,78 @@
-use super::card::{AttackSum, Card, CardSuit, CardValue};
+use super::card::{AttackSum, Card, CardSuit, CardValue, FromCardIter, Hand};
 use super::enemy::Enemy;
 use super::player::{Player, PlayerId};
 use super::table::Table;
 use crate::error::RegicideError;
 use crate::game::{Action, GameResult, GameStatus};
+use arrayvec::ArrayVecCopy;
 use itertools::Itertools;
 use rand::prelude::{SliceRandom, StdRng};
-use rand::rngs::ThreadRng;
-use rand::SeedableRng;
+use rand::{RngCore, SeedableRng};
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
+use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 
-#[derive(Debug, Clone)]
-pub struct State {
+#[derive(Debug, Clone, Copy, Hash)]
+pub struct State<const N_PLAYERS: usize> {
     table: Table,
-    pub players: Vec<Player>,
+    pub players: [Player; N_PLAYERS],
     has_turn: PlayerId,
     times_yielded: usize,
     max_hand_size: u8,
     action_type: ActionType,
     has_ended: Option<GameResult>,
     level: u8,
-    rng: rand::rngs::StdRng,
-}
-impl Hash for State {
-    fn hash<H>(&self, hasher: &mut H)
-    where
-        H: Hasher,
-    {
-        self.has_turn.hash(hasher);
-    }
+    rng_seed: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash)]
 enum ActionType {
     PlayCards,
     Discard(u8),
     Jester,
 }
 
-impl State {
-    pub fn new(n_players: usize, seed: Option<u64>) -> Result<Self, RegicideError> {
-        let mut rng = match seed {
+impl<const N_PLAYERS: usize> State<N_PLAYERS> {
+    fn new_rng(seed: Option<u64>) -> StdRng {
+        match seed {
             Some(s) => StdRng::seed_from_u64(s),
             None => StdRng::from_rng(rand::thread_rng()).unwrap(),
-        };
+        }
+    }
 
-        let (n_jesters, max_hand_size) = match n_players {
+    fn get_rng(&mut self) -> StdRng {
+        let mut rng = Self::new_rng(Some(self.rng_seed));
+        self.rng_seed = rng.next_u64();
+        rng
+    }
+
+    pub fn new(seed: Option<u64>) -> Result<Self, RegicideError> {
+        let mut rng = Self::new_rng(seed);
+        let (n_jesters, max_hand_size) = match N_PLAYERS {
             1 => (0, 8),
             2 => (0, 7),
             3 => (1, 6),
             4 => (2, 5),
             _ => return Err(RegicideError::WrongNumberOfPlayers),
         };
-        let mut table = Table::new(n_jesters, &mut rng)?;
-        let players = (0..n_players)
+        let mut table = Table::new(n_jesters, &mut rng);
+        let players = (0..N_PLAYERS)
             .map(|id| Player::new(id, table.draw_cards(max_hand_size)))
-            .collect();
+            .collect_vec()
+            .try_into()
+            .unwrap();
 
         Ok(Self {
             table,
             players,
             has_turn: PlayerId(0),
             times_yielded: 0,
-            max_hand_size,
+            max_hand_size: max_hand_size as u8,
             action_type: ActionType::PlayCards,
             has_ended: None,
             level: 0,
-            rng,
+            rng_seed: rng.next_u64(),
         })
     }
 
@@ -76,12 +80,12 @@ impl State {
         self.has_turn
     }
 
-    pub fn take_action(&self, action: &Action) -> GameStatus {
-        let next_state = self.clone();
+    pub fn take_action(&self, action: &Action) -> GameStatus<N_PLAYERS> {
+        let next_state = *self;
         Self::apply_action(next_state, action)
     }
 
-    fn apply_action(mut self, action: &Action) -> GameStatus {
+    fn apply_action(mut self, action: &Action) -> GameStatus<N_PLAYERS> {
         self.times_yielded = match action {
             Action::Discard(_) => self.times_yielded,
             Action::Yield => self.times_yielded + 1,
@@ -89,18 +93,23 @@ impl State {
         };
 
         match action {
-            Action::Play(c) => self.play_cards(vec![*c]),
-            Action::AnimalCombo(c1, c2) => self.play_cards(vec![*c1, *c2]),
-            Action::Combo2(c1, c2) => self.play_cards(vec![*c1, *c2]),
-            Action::Combo3(c1, c2, c3) => self.play_cards(vec![*c1, *c2, *c3]),
-            Action::Combo4(c1, c2, c3, c4) => self.play_cards(vec![*c1, *c2, *c3, *c4]),
+            Action::Play(c) => self.play_cards(Hand::from_card_iter([*c])),
+            Action::AnimalCombo(c1, c2) => self.play_cards(Hand::from_card_iter([*c1, *c2])),
+            Action::Combo(cards) => {
+                self.play_cards(Hand::from_card_iter(cards.into_iter().copied()))
+            }
+            // Action::Combo2(c1, c2) => self.play_cards(Hand::from_slice(&[*c1, *c2])),
+            // Action::Combo3(c1, c2, c3) => self.play_cards(Hand::from_slice(&[*c1, *c2, *c3])),
+            // Action::Combo4(c1, c2, c3, c4) => {
+            //     self.play_cards(Hand::from_slice(&[*c1, *c2, *c3, *c4]))
+            // }
             Action::Discard(discard_cards) => {
                 self.current_player_mut().hand = self
                     .current_player_mut()
                     .hand
                     .iter()
-                    .filter(|&card| !discard_cards.contains(card))
-                    .map(|c| *c)
+                    .filter(|&card| !discard_cards.iter().contains(&card))
+                    .copied()
                     .collect();
 
                 self.action_type = ActionType::PlayCards;
@@ -109,7 +118,7 @@ impl State {
             }
             Action::Yield => {
                 if self.times_yielded < self.players.len() {
-                    self.play_cards(vec![])
+                    self.play_cards(Hand::new())
                 } else {
                     // All players cannot yield consequtively
                     GameStatus::HasEnded(GameResult::Lost(self.reward()))
@@ -123,7 +132,7 @@ impl State {
         }
     }
 
-    fn play_cards(mut self, cards: Vec<Card>) -> GameStatus {
+    fn play_cards<'a>(mut self, cards: Hand) -> GameStatus<N_PLAYERS> {
         use super::card::CardSuit::*;
 
         // Step 1: Play a card from hand to attack the enemy
@@ -151,7 +160,7 @@ impl State {
         }
 
         self.current_player_mut().remove_from_hand(&cards);
-        self.table.add_attack_cards(&cards);
+        self.table.add_attack_cards(cards.iter().copied());
 
         // Step 2: Activate the played card’s suit power
 
@@ -183,10 +192,11 @@ impl State {
                     // out a number of cards facedown equal to the attack value played. Place
                     // them under the Tavern deck (no peeking!) then, return the discard pile
                     // to the table, faceup.
-                    Hearts => self
-                        .table
-                        .heal_from_discard(attack_value as u8, &mut self.rng),
-
+                    Hearts => {
+                        let mut rng = self.get_rng();
+                        self.table
+                            .heal_from_discard(attack_value as usize, &mut rng)
+                    }
                     // Draw cards: The current player draws a card. The other players follow
                     // in clockwise order drawing one card at a time until a number of cards
                     // equal to the attack value played have been drawn. Players that have
@@ -199,9 +209,9 @@ impl State {
                                 let index = ((i + offset) % self.players.len() as u16) as usize;
                                 let player = self.players.get_mut(index).unwrap();
                                 if (player.hand.len()) < self.max_hand_size as usize {
-                                    let mut card = self.table.draw_cards(1);
-                                    // println!("Draw {:?} => {:?}", &card, &player);
-                                    player.hand.append(&mut card);
+                                    if let Some(card) = self.table.draw_card() {
+                                        player.hand.push(card);
+                                    }
                                     break;
                                 }
                             }
@@ -357,17 +367,29 @@ impl State {
                 .hand
                 .iter()
                 .filter(|c| c.value == *card_value)
-                .collect::<Vec<&Card>>();
+                .copied()
+                .collect::<Hand>();
             let combos = [2, 3, 4]
                 .iter()
                 .flat_map(|len| same_value_cards.iter().combinations(*len))
-                .filter(|combo| combo.iter().map(|c| **c).collect_vec().attack_sum() <= 10)
-                .map(|combo| match combo[..] {
-                    [c1, c2] => Action::Combo2(**c1, **c2),
-                    [c1, c2, c3] => Action::Combo3(**c1, **c2, **c3),
-                    [c1, c2, c3, c4] => Action::Combo4(**c1, **c2, **c3, **c4),
-                    _ => panic!("Combo of wrong size."),
+                .filter(|combo| {
+                    combo
+                        .into_iter()
+                        .map(|c| **c)
+                        .collect::<Hand>()
+                        .attack_sum()
+                        <= 10
+                })
+                .map(|combo| {
+                    Action::Combo(ArrayVecCopy::<Card, 4>::from_card_iter(
+                        combo.into_iter().copied(),
+                    ))
                 });
+            // .map(|combo| {
+            //     let mut arr = ArrayVec::<Card, 4>::new();
+            //     arr.extend(combo.into_iter().copied());
+            //     Action::Combo(arr)
+            // });
             actions.extend(combos);
         }
 
@@ -375,36 +397,36 @@ impl State {
         actions
     }
 
-    pub fn random_permutation(&self) -> State {
-        let mut new_state = self.clone();
-        let player_hands = new_state
+    pub fn random_permutation(&self) -> State<N_PLAYERS> {
+        let mut new_state = *self;
+        let mut rng = new_state.get_rng();
+        let mut player_hands = new_state
             .players
             .iter_mut()
             .filter(|player| player.id() != self.current_player().id())
             .map(|player| &mut player.hand)
             .collect_vec();
-
-        new_state.table.permute(player_hands, &mut new_state.rng);
+        new_state.table.permute(&mut player_hands[..], &mut rng);
 
         new_state
     }
 }
 
-use mcts::{CycleBehaviour, Evaluator, GameState, MoveEvaluation, SearchHandle, MCTS};
+use mcts::{Evaluator, GameState, MoveEvaluation, SearchHandle, MCTS};
 
-impl GameState for State {
+impl<const N_PLAYERS: usize> GameState for State<N_PLAYERS> {
     type Move = Action;
     type Player = Player;
     type MoveList = Vec<Action>;
 
     fn current_player(&self) -> Self::Player {
-        self.current_player().clone()
+        *self.current_player()
     }
     fn available_moves(&self) -> Vec<Self::Move> {
         self.get_action_space()
     }
     fn make_move(&mut self, action: &Self::Move) {
-        match self.clone().apply_action(action) {
+        match (*self).apply_action(action) {
             GameStatus::InProgress(state) => {
                 *self = state;
             }
@@ -415,7 +437,7 @@ impl GameState for State {
     }
 }
 
-impl TranspositionHash for State {
+impl<const N_PLAYERS: usize> TranspositionHash for State<N_PLAYERS> {
     fn hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         Hash::hash(&self, &mut hasher);
@@ -423,20 +445,21 @@ impl TranspositionHash for State {
     }
 }
 
-pub struct MyEvaluator;
+pub struct MyEvaluator<const N_PLAYERS: usize>;
 
-impl Evaluator<MyMCTS> for MyEvaluator {
+impl<const N_PLAYERS: usize> Evaluator<MyMCTS<N_PLAYERS>> for MyEvaluator<N_PLAYERS> {
     type StateEvaluation = GameResult;
 
     // Random default policy
     fn evaluate_new_state(
         &self,
-        state: &State,
+        state: &State<N_PLAYERS>,
         moves: &Vec<Action>,
-        _: Option<SearchHandle<MyMCTS>>,
-    ) -> (Vec<MoveEvaluation<MyMCTS>>, GameResult) {
-        let mut node = state.clone();
-        let mut rand = rand::rngs::StdRng::seed_from_u64(1337);
+        _: Option<SearchHandle<MyMCTS<N_PLAYERS>>>,
+    ) -> (Vec<MoveEvaluation<MyMCTS<N_PLAYERS>>>, GameResult) {
+        let mut node = *state;
+        // let mut rand = rand::thread_rng();
+        let mut rand = node.get_rng();
         let result;
         loop {
             let moves = node.available_moves();
@@ -463,14 +486,16 @@ impl Evaluator<MyMCTS> for MyEvaluator {
         }
         (vec![(); moves.len()], result)
     }
+
     fn evaluate_existing_state(
         &self,
-        _: &State,
+        _state: &State<N_PLAYERS>,
         evaln: &GameResult,
-        _: SearchHandle<MyMCTS>,
+        _search_handle: SearchHandle<MyMCTS<N_PLAYERS>>,
     ) -> GameResult {
         *evaln
     }
+
     fn interpret_evaluation_for_player(&self, evaln: &GameResult, _player: &Player) -> i64 {
         match evaln {
             GameResult::Won => 36_i64,
@@ -478,26 +503,43 @@ impl Evaluator<MyMCTS> for MyEvaluator {
         }
     }
 }
-use mcts::transposition_table::{ApproxTable, TranspositionHash};
+use mcts::transposition_table::{ApproxTable, TranspositionHash, TranspositionTable};
 use mcts::tree_policy::UCTPolicy;
 
 #[derive(Default)]
-pub struct MyMCTS;
+pub struct MyMCTS<const N_PLAYERS: usize>;
 
-impl MCTS for MyMCTS {
-    type State = State;
-    type Eval = MyEvaluator;
-    type NodeData = ();
-    type ExtraThreadData = ();
-    type TreePolicy = UCTPolicy;
-    type TranspositionTable = ApproxTable<Self>;
+pub struct EmptyTable;
 
-    fn cycle_behaviour(&self) -> CycleBehaviour<Self> {
-        CycleBehaviour::UseCurrentEvalWhenCycleDetected
+unsafe impl<Spec: MCTS> TranspositionTable<Spec> for EmptyTable {
+    fn insert<'a>(
+        &'a self,
+        _key: &<Spec as MCTS>::State,
+        _value: &'a mcts::SearchNode<Spec>,
+        _handle: SearchHandle<Spec>,
+    ) -> Option<&'a mcts::SearchNode<Spec>> {
+        None
+    }
+
+    fn lookup<'a>(
+        &'a self,
+        _key: &<Spec as MCTS>::State,
+        _handle: SearchHandle<Spec>,
+    ) -> Option<&'a mcts::SearchNode<Spec>> {
+        None
     }
 }
 
-impl std::fmt::Display for State {
+impl<const N_PLAYERS: usize> MCTS for MyMCTS<N_PLAYERS> {
+    type State = State<N_PLAYERS>;
+    type Eval = MyEvaluator<N_PLAYERS>;
+    type NodeData = ();
+    type ExtraThreadData = ();
+    type TreePolicy = UCTPolicy;
+    type TranspositionTable = EmptyTable;
+}
+
+impl<const N_PLAYERS: usize> std::fmt::Display for State<N_PLAYERS> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // self.table: Table
         // self.pub players: Vec<Player>

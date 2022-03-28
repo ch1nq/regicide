@@ -1,4 +1,4 @@
-use super::card::{AttackSum, Card};
+use super::card::{AttackSum, Hand};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
 pub struct PlayerId(pub usize);
@@ -9,14 +9,14 @@ impl PlayerId {
     }
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct Player {
     id: PlayerId,
-    pub hand: Vec<Card>,
+    pub hand: Hand,
 }
 
 impl Player {
-    pub fn new(id: usize, hand: Vec<Card>) -> Self {
+    pub fn new(id: usize, hand: Hand) -> Self {
         Self {
             id: PlayerId(id),
             hand,
@@ -32,12 +32,12 @@ impl Player {
     }
 
     /// Removes specified cards from the players hand if they are present.
-    pub fn remove_from_hand(&mut self, cards: &Vec<Card>) {
+    pub fn remove_from_hand(&mut self, cards: &Hand) {
         self.hand = self
             .hand
             .iter()
             .filter(|card| !cards.contains(card))
-            .map(|c| *c)
+            .copied()
             .collect();
     }
 }

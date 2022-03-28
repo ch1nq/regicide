@@ -1,11 +1,9 @@
-use crate::game::card::Card;
 use std::error::Error;
 use std::fmt::Formatter;
 
 #[derive(Debug)]
 pub enum RegicideError {
     WrongNumberOfPlayers,
-    NotAnEnemy(Card),
 }
 
 impl std::fmt::Display for RegicideError {

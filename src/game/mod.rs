@@ -4,12 +4,12 @@ mod player;
 pub mod state;
 mod table;
 
-use std::fmt::Debug;
-
+use self::{card::Hand, player::PlayerId};
 use card::Card;
 use state::State;
+use std::fmt::Debug;
 
-use self::player::PlayerId;
+pub const MAX_HAND_SIZE: usize = 8;
 
 #[derive(Debug, Clone, Copy, Hash)]
 pub enum GameResult {
@@ -17,8 +17,8 @@ pub enum GameResult {
     Lost(u8),
 }
 #[derive(Debug)]
-pub enum GameStatus {
-    InProgress(State),
+pub enum GameStatus<const N_PLAYERS: usize> {
+    InProgress(State<N_PLAYERS>),
     HasEnded(GameResult),
 }
 
@@ -28,10 +28,8 @@ struct Game {}
 pub enum Action {
     Play(Card),
     AnimalCombo(Card, Card),
-    Combo2(Card, Card),
-    Combo3(Card, Card, Card),
-    Combo4(Card, Card, Card, Card),
+    Combo(arrayvec::ArrayVecCopy<Card, 4>),
     Yield,
-    Discard(Vec<Card>),
+    Discard(Hand),
     ChangePlayer(PlayerId),
 }

@@ -1,5 +1,27 @@
 use core::fmt;
 
+use arrayvec::ArrayVecCopy;
+
+pub type CardVec = ArrayVecCopy<Card, 54>;
+pub type Hand = ArrayVecCopy<Card, { super::MAX_HAND_SIZE }>;
+
+pub trait FromCardIter {
+    fn from_card_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = Card>;
+}
+
+impl<const N: usize> FromCardIter for ArrayVecCopy<Card, N> {
+    fn from_card_iter<T>(iter: T) -> ArrayVecCopy<Card, N>
+    where
+        T: IntoIterator<Item = Card>,
+    {
+        let mut arr = ArrayVecCopy::<Card, N>::new();
+        arr.extend(iter.into_iter());
+        arr
+    }
+}
+
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Card {
     pub suit: CardSuit,
@@ -35,6 +57,12 @@ impl<T> AttackSum for Vec<T>
 where
     T: AttackValue,
 {
+    fn attack_sum(&self) -> u16 {
+        self.iter().map(|card| card.attack_value()).sum()
+    }
+}
+
+impl AttackSum for Hand {
     fn attack_sum(&self) -> u16 {
         self.iter().map(|card| card.attack_value()).sum()
     }

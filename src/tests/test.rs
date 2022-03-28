@@ -1,34 +1,40 @@
-use crate::game::card::{Card, CardSuit::*, CardValue::*};
+use crate::game::card::{Card, CardSuit::*, CardValue::*, FromCardIter, Hand};
 use crate::game::Action;
 
 const SEED: u64 = 1337;
 
+macro_rules! hand {
+    ($(($suit:expr, $value:expr)),+ $(,)?) => (
+        Hand::from_card_iter(vec![
+            $(Card::new($suit, $value)),+
+        ].into_iter())
+    );
+}
+
 #[test]
 fn no_duplicate_animal_combos() {
-    let mut state = crate::game::state::State::new(1, Some(SEED)).unwrap();
-    state.players[0].hand = vec![
-        Card::new(Diamonds, Ace),
-        Card::new(Hearts, Ace),
-        Card::new(Spades, Ace),
-        Card::new(Spades, Six),
-        Card::new(Spades, Seven),
-    ];
+    let mut state = crate::game::state::State::<1>::new(Some(SEED)).unwrap();
+    state.players[0].hand = hand!(
+        (Diamonds, Ace),
+        (Hearts, Ace),
+        (Spades, Ace),
+        (Spades, Six),
+        (Spades, Seven),
+    );
     let actions = state.get_action_space();
     dbg!(&state.players[0].hand);
     dbg!(&actions);
-    assert_eq!(combo_count(&actions, "a"), 9);
+    assert_eq!(combo_count(&actions, "animal", 2), 9);
 }
 
 /// `n` is the size of the combos to be counted.
 /// E.g. setting `n=2` will return the amount Combo2 actions.
-fn combo_count(actions: &Vec<Action>, variant: &str) -> usize {
+fn combo_count(actions: &Vec<Action>, variant: &str, combo_len: usize) -> usize {
     actions
         .iter()
         .filter(|action| match (variant, action) {
-            ("a", Action::AnimalCombo(_, _)) => true,
-            ("c2", Action::Combo2(_, _)) => true,
-            ("c3", Action::Combo3(_, _, _)) => true,
-            ("c4", Action::Combo4(_, _, _, _)) => true,
+            ("animal", Action::AnimalCombo(_, _)) => true,
+            ("combo", Action::Combo(a)) if a.len() <= combo_len => true,
             _ => false,
         })
         .count()
@@ -36,45 +42,36 @@ fn combo_count(actions: &Vec<Action>, variant: &str) -> usize {
 
 #[test]
 fn two_card_combos() {
-    let mut state = crate::game::state::State::new(1, Some(SEED)).unwrap();
-    state.players[0].hand = vec![Card::new(Diamonds, Two), Card::new(Clubs, Two)];
+    let mut state = crate::game::state::State::<1>::new(Some(SEED)).unwrap();
+    state.players[0].hand = hand!((Diamonds, Two), (Clubs, Two));
     let actions = state.get_action_space();
     dbg!(&state.players[0].hand);
     dbg!(&actions);
-    assert_eq!(combo_count(&actions, "c2"), 1);
-    assert_eq!(combo_count(&actions, "c3"), 0);
-    assert_eq!(combo_count(&actions, "c4"), 0);
+    assert_eq!(combo_count(&actions, "combo", 2), 1);
+    assert_eq!(combo_count(&actions, "combo", 3), 0);
+    assert_eq!(combo_count(&actions, "combo", 4), 0);
 }
 
 #[test]
 fn three_card_combos() {
-    let mut state = crate::game::state::State::new(1, Some(SEED)).unwrap();
-    state.players[0].hand = vec![
-        Card::new(Diamonds, Two),
-        Card::new(Clubs, Two),
-        Card::new(Hearts, Two),
-    ];
+    let mut state = crate::game::state::State::<1>::new(Some(SEED)).unwrap();
+    state.players[0].hand = hand!((Diamonds, Two), (Clubs, Two), (Hearts, Two),);
     let actions = state.get_action_space();
     dbg!(&state.players[0].hand);
     dbg!(&actions);
-    assert_eq!(combo_count(&actions, "c2"), 3);
-    assert_eq!(combo_count(&actions, "c3"), 1);
-    assert_eq!(combo_count(&actions, "c4"), 0);
+    assert_eq!(combo_count(&actions, "combo", 2), 3);
+    assert_eq!(combo_count(&actions, "combo", 3), 1);
+    assert_eq!(combo_count(&actions, "combo", 4), 0);
 }
 
 #[test]
 fn four_card_combos() {
-    let mut state = crate::game::state::State::new(1, Some(SEED)).unwrap();
-    state.players[0].hand = vec![
-        Card::new(Diamonds, Two),
-        Card::new(Clubs, Two),
-        Card::new(Hearts, Two),
-        Card::new(Spades, Two),
-    ];
+    let mut state = crate::game::state::State::<1>::new(Some(SEED)).unwrap();
+    state.players[0].hand = hand!((Diamonds, Two), (Clubs, Two), (Hearts, Two), (Spades, Two),);
     let actions = state.get_action_space();
     dbg!(&state.players[0].hand);
     dbg!(&actions);
-    assert_eq!(combo_count(&actions, "c2"), 6);
-    assert_eq!(combo_count(&actions, "c3"), 4);
-    assert_eq!(combo_count(&actions, "c4"), 1);
+    assert_eq!(combo_count(&actions, "combo", 2), 6);
+    assert_eq!(combo_count(&actions, "combo", 3), 4);
+    assert_eq!(combo_count(&actions, "combo", 4), 1);
 }
