@@ -282,11 +282,12 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
     }
 
     pub fn reward(&self) -> u8 {
-        match self.level {
-            0..=4 => self.level * 2,
-            5..=8 => 8 + (self.level - 4) * 2,
-            _ => 20 + (self.level - 8) * 4,
-        }
+        // match self.level {
+        //     0..=4 => self.level * 2,
+        //     5..=8 => 8 + (self.level - 4) * 2,
+        //     _ => 20 + (self.level - 8) * 4,
+        // }
+        self.level
     }
 
     fn current_player_mut(&mut self) -> &mut Player {
@@ -397,16 +398,16 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
         actions
     }
 
-    pub fn random_permutation(&self) -> State<N_PLAYERS> {
+    pub fn random_permutation(&self, rng: &mut StdRng) -> State<N_PLAYERS> {
         let mut new_state = *self;
-        let mut rng = new_state.get_rng();
+        // let mut rng = new_state.get_rng();
         let mut player_hands = new_state
             .players
             .iter_mut()
             .filter(|player| player.id() != self.current_player().id())
             .map(|player| &mut player.hand)
             .collect_vec();
-        new_state.table.permute(&mut player_hands[..], &mut rng);
+        new_state.table.permute(&mut player_hands[..], rng);
 
         new_state
     }
@@ -458,19 +459,22 @@ impl<const N_PLAYERS: usize> Evaluator<MyMCTS<N_PLAYERS>> for MyEvaluator<N_PLAY
         _: Option<SearchHandle<MyMCTS<N_PLAYERS>>>,
     ) -> (Vec<MoveEvaluation<MyMCTS<N_PLAYERS>>>, GameResult) {
         let mut node = *state;
-        // let mut rand = rand::thread_rng();
-        let mut rand = node.get_rng();
+        // let mut rng = node.get_rng();
+        let mut rng = rand::rngs::StdRng::from_rng(rand::thread_rng()).unwrap();
+        // dbg!(rng.next_u32());
+        node.random_permutation(&mut rng);
         let result;
         loop {
             let moves = node.available_moves();
-            match moves.choose(&mut rand) {
+            match moves.choose(&mut rng) {
                 Some(random_action) => match node.apply_action(random_action) {
-                    GameStatus::InProgress(state) => {
-                        if let Some(res) = state.has_ended {
+                    GameStatus::InProgress(new_state) => {
+                        if let Some(res) = new_state.has_ended {
                             result = res;
                             break;
                         } else {
-                            node = state.random_permutation();
+                            node = new_state;
+                            // node = state.random_permutation(&mut rand);
                         }
                     }
                     GameStatus::HasEnded(res) => {
@@ -489,22 +493,25 @@ impl<const N_PLAYERS: usize> Evaluator<MyMCTS<N_PLAYERS>> for MyEvaluator<N_PLAY
 
     fn evaluate_existing_state(
         &self,
-        _state: &State<N_PLAYERS>,
-        evaln: &GameResult,
-        _search_handle: SearchHandle<MyMCTS<N_PLAYERS>>,
+        state: &State<N_PLAYERS>,
+        _evaln: &GameResult,
+        handle: SearchHandle<MyMCTS<N_PLAYERS>>,
     ) -> GameResult {
-        *evaln
+        self.evaluate_new_state(state, &state.available_moves(), Some(handle))
+            .1
     }
 
     fn interpret_evaluation_for_player(&self, evaln: &GameResult, _player: &Player) -> i64 {
         match evaln {
-            GameResult::Won => 36_i64,
-            GameResult::Lost(reward) => *reward as i64,
+            GameResult::Won => GameResult::max_score().into(),
+            GameResult::Lost(reward) => (*reward).into(),
         }
     }
 }
+
 use mcts::transposition_table::{ApproxTable, TranspositionHash, TranspositionTable};
 use mcts::tree_policy::UCTPolicy;
+use mcts::CycleBehaviour;
 
 #[derive(Default)]
 pub struct MyMCTS<const N_PLAYERS: usize>;
@@ -537,6 +544,19 @@ impl<const N_PLAYERS: usize> MCTS for MyMCTS<N_PLAYERS> {
     type ExtraThreadData = ();
     type TreePolicy = UCTPolicy;
     type TranspositionTable = EmptyTable;
+    // type TranspositionTable = ApproxTable<Self>;
+
+    fn cycle_behaviour(&self) -> CycleBehaviour<Self> {
+        CycleBehaviour::PanicWhenCycleDetected
+    }
+
+    fn max_playout_length(&self) -> usize {
+        1_000
+    }
+
+    // fn node_limit(&self) -> usize {
+    //     10_000
+    // }
 }
 
 impl<const N_PLAYERS: usize> std::fmt::Display for State<N_PLAYERS> {

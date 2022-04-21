@@ -33,3 +33,9 @@ pub enum Action {
     Discard(Hand),
     ChangePlayer(PlayerId),
 }
+
+impl GameResult {
+    pub const fn max_score() -> u8 {
+        12
+    }
+}

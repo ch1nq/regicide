@@ -1,18 +1,39 @@
 use itertools::Itertools;
+use mcts::transposition_table::ApproxTable;
 use rand::seq::SliceRandom;
 use rand::{RngCore, SeedableRng};
 use regicide_rl::game::state::{self, EmptyTable};
 use regicide_rl::game::{GameResult, GameStatus};
 use std::io::stdin;
 
-fn main() {
-    let mut meta_rng = rand::rngs::StdRng::seed_from_u64(1337);
-    let mut result = GameResult::Won;
-    for _ in 0..1 {
-        // result = _random_playout(Some(meta_rng.next_u64()));
-        result = mcts_playout(Some(meta_rng.next_u64()));
+trait Thousand {
+    fn k(self) -> Self;
+}
+
+impl<T> Thousand for T
+where
+    T: std::ops::Mul<T, Output = T> + From<u16>,
+{
+    fn k(self) -> Self {
+        self * 1000.into()
     }
-    dbg!(result);
+}
+
+fn main() {
+    let mut meta_rng = rand::rngs::StdRng::seed_from_u64(42);
+    let mut results = vec![];
+    for _ in 0..20 {
+        // result = _random_playout(Some(meta_rng.next_u64()));
+        let result = mcts_playout::<4>(Some(meta_rng.next_u64()), 10.k());
+        let score = match result {
+            GameResult::Lost(i) => i,
+            GameResult::Won => GameResult::max_score(),
+        };
+        dbg!(score);
+        results.push(score as u32);
+    }
+    let avg: f32 = results.iter().sum::<u32>() as f32 / results.len() as f32;
+    dbg!(avg);
 }
 
 fn _random_playout(seed: Option<u64>) -> GameResult {
@@ -37,35 +58,33 @@ use mcts::tree_policy::UCTPolicy;
 use mcts::MCTSManager;
 use state::{MyEvaluator, MyMCTS};
 
-fn mcts_playout(seed: Option<u64>) -> GameResult {
-    let mut state = state::State::<1>::new(seed).unwrap();
+fn mcts_playout<const N: usize>(seed: Option<u64>, n_playouts: u32) -> GameResult {
+    let mut state = state::State::<N>::new(seed).unwrap();
 
     loop {
         let mut mcts = MCTSManager::new(
             state,
             MyMCTS,
             MyEvaluator,
-            // UCTPolicy::new(4.4),
-            UCTPolicy::new(36_f64 / f64::sqrt(2_f64)),
-            // UCTPolicy::new(1_f64 / f64::sqrt(2_f64)),
+            // UCTPolicy::new(36_f64 / f64::sqrt(2_f64)),
+            UCTPolicy::new(GameResult::max_score() as f64 / f64::sqrt(2_f64)),
             EmptyTable,
         );
 
-        println!("{}", state);
+        // println!("{}", state);
 
-        mcts.playout_n(1_000_000);
-        // mcts.playout_n_parallel(10_000_000, 6);
+        mcts.playout_n_parallel(n_playouts, 2);
 
         // Print top 10 moves
         let root = mcts.tree().root_node();
-        let mut moves = root.moves().into_iter().take(10).collect_vec();
+        let mut moves = root.moves().into_iter().collect_vec();
         moves.sort_by_key(|x| -(x.visits() as i64));
-        println!();
-        print!("--> ");
-        for mov in moves {
-            println!("{:?}", mov);
-        }
-        println!();
+        // println!();
+        // print!("  ---->");
+        // for mov in moves.iter().take(3) {
+        //     println!("\t{:?}", mov);
+        // }
+        // println!();
 
         match state.take_action(&mcts.best_move().expect("There should be a best move")) {
             GameStatus::InProgress(new_state) => {
