@@ -10,7 +10,7 @@ use rand::prelude::{SliceRandom, StdRng};
 use rand::{RngCore, SeedableRng};
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, Copy, Hash)]
@@ -448,7 +448,33 @@ impl<const N_PLAYERS: usize> TranspositionHash for State<N_PLAYERS> {
 
 pub struct MyEvaluator<const N_PLAYERS: usize>;
 
-impl<const N_PLAYERS: usize> Evaluator<MyMCTS<N_PLAYERS>> for MyEvaluator<N_PLAYERS> {
+fn prune_bad_moves(all_moves: Vec<Action>) -> Vec<Action> {
+    let filters = vec![
+        // Never discard any Diamonds
+        |m: &&Action| match m {
+            Action::Discard(cards) => cards.iter().all(|card| match card {
+                Card {
+                    suit: CardSuit::Diamonds,
+                    ..
+                } => false,
+                _ => true,
+            }),
+            _ => true,
+        },
+    ];
+    let mut moves_iter = all_moves;
+    for f in filters {
+        let foo = moves_iter.iter().filter(f).copied().collect_vec();
+        if foo.len() > 0 {
+            moves_iter = foo;
+        }
+    }
+    moves_iter
+}
+
+impl<const N_PLAYERS: usize, const HEURISTICS: bool> Evaluator<MyMCTS<N_PLAYERS, HEURISTICS>>
+    for MyEvaluator<N_PLAYERS>
+{
     type StateEvaluation = GameResult;
 
     // Random default policy
@@ -456,8 +482,11 @@ impl<const N_PLAYERS: usize> Evaluator<MyMCTS<N_PLAYERS>> for MyEvaluator<N_PLAY
         &self,
         state: &State<N_PLAYERS>,
         moves: &Vec<Action>,
-        _: Option<SearchHandle<MyMCTS<N_PLAYERS>>>,
-    ) -> (Vec<MoveEvaluation<MyMCTS<N_PLAYERS>>>, GameResult) {
+        _: Option<SearchHandle<MyMCTS<N_PLAYERS, HEURISTICS>>>,
+    ) -> (
+        Vec<MoveEvaluation<MyMCTS<N_PLAYERS, HEURISTICS>>>,
+        GameResult,
+    ) {
         let mut node = *state;
         // let mut rng = node.get_rng();
         let mut rng = rand::rngs::StdRng::from_rng(rand::thread_rng()).unwrap();
@@ -465,7 +494,10 @@ impl<const N_PLAYERS: usize> Evaluator<MyMCTS<N_PLAYERS>> for MyEvaluator<N_PLAY
         node.random_permutation(&mut rng);
         let result;
         loop {
-            let moves = node.available_moves();
+            let mut moves = node.available_moves();
+            if HEURISTICS {
+                moves = prune_bad_moves(moves);
+            }
             match moves.choose(&mut rng) {
                 Some(random_action) => match node.apply_action(random_action) {
                     GameStatus::InProgress(new_state) => {
@@ -495,7 +527,7 @@ impl<const N_PLAYERS: usize> Evaluator<MyMCTS<N_PLAYERS>> for MyEvaluator<N_PLAY
         &self,
         state: &State<N_PLAYERS>,
         _evaln: &GameResult,
-        handle: SearchHandle<MyMCTS<N_PLAYERS>>,
+        handle: SearchHandle<MyMCTS<N_PLAYERS, HEURISTICS>>,
     ) -> GameResult {
         self.evaluate_new_state(state, &state.available_moves(), Some(handle))
             .1
@@ -509,12 +541,12 @@ impl<const N_PLAYERS: usize> Evaluator<MyMCTS<N_PLAYERS>> for MyEvaluator<N_PLAY
     }
 }
 
-use mcts::transposition_table::{ApproxTable, TranspositionHash, TranspositionTable};
+use mcts::transposition_table::{TranspositionHash, TranspositionTable};
 use mcts::tree_policy::UCTPolicy;
 use mcts::CycleBehaviour;
 
 #[derive(Default)]
-pub struct MyMCTS<const N_PLAYERS: usize>;
+pub struct MyMCTS<const N_PLAYERS: usize, const HEURISTICS: bool>;
 
 pub struct EmptyTable;
 
@@ -537,7 +569,7 @@ unsafe impl<Spec: MCTS> TranspositionTable<Spec> for EmptyTable {
     }
 }
 
-impl<const N_PLAYERS: usize> MCTS for MyMCTS<N_PLAYERS> {
+impl<const N_PLAYERS: usize, const HEURISTICS: bool> MCTS for MyMCTS<N_PLAYERS, HEURISTICS> {
     type State = State<N_PLAYERS>;
     type Eval = MyEvaluator<N_PLAYERS>;
     type NodeData = ();

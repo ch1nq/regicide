@@ -24,7 +24,7 @@ pub enum GameStatus<const N_PLAYERS: usize> {
 
 #[derive(Debug)]
 struct Game {}
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Action {
     Play(Card),
     AnimalCombo(Card, Card),

@@ -23,8 +23,7 @@ fn main() {
     let mut meta_rng = rand::rngs::StdRng::seed_from_u64(42);
     let mut results = vec![];
     for _ in 0..20 {
-        // result = _random_playout(Some(meta_rng.next_u64()));
-        let result = mcts_playout::<4>(Some(meta_rng.next_u64()), 10.k());
+        let result = mcts_playout::<4, false>(Some(meta_rng.next_u64()), 15.k());
         let score = match result {
             GameResult::Lost(i) => i,
             GameResult::Won => GameResult::max_score(),
@@ -58,22 +57,24 @@ use mcts::tree_policy::UCTPolicy;
 use mcts::MCTSManager;
 use state::{MyEvaluator, MyMCTS};
 
-fn mcts_playout<const N: usize>(seed: Option<u64>, n_playouts: u32) -> GameResult {
+fn mcts_playout<const N: usize, const use_heuristics: bool>(
+    seed: Option<u64>,
+    n_playouts: u32,
+) -> GameResult {
     let mut state = state::State::<N>::new(seed).unwrap();
 
     loop {
         let mut mcts = MCTSManager::new(
             state,
-            MyMCTS,
+            MyMCTS::<N, use_heuristics>,
             MyEvaluator,
-            // UCTPolicy::new(36_f64 / f64::sqrt(2_f64)),
             UCTPolicy::new(GameResult::max_score() as f64 / f64::sqrt(2_f64)),
             EmptyTable,
         );
 
         // println!("{}", state);
 
-        mcts.playout_n_parallel(n_playouts, 2);
+        mcts.playout_n_parallel(n_playouts, 8);
 
         // Print top 10 moves
         let root = mcts.tree().root_node();
