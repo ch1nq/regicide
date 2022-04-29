@@ -308,6 +308,11 @@ struct PyActionChangePlayer(PlayerId);
 
 #[pymethods]
 impl PyActionPlay {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionPlay(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new(card: Card) -> Self {
         Self(card)
@@ -320,6 +325,11 @@ impl PyActionPlay {
 }
 #[pymethods]
 impl PyActionAnimalCombo {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionAnimalCombo(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new(c1: Card, c2: Card) -> Self {
         Self(c1, c2)
@@ -332,6 +342,11 @@ impl PyActionAnimalCombo {
 }
 #[pymethods]
 impl PyActionCombo {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionCombo(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new(cards: Vec<Card>) -> Self {
         let cards_arr = arrayvec::ArrayVecCopy::from_iter(cards.into_iter());
@@ -345,6 +360,11 @@ impl PyActionCombo {
 }
 #[pymethods]
 impl PyActionYield {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionYield(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new() -> Self {
         Self
@@ -369,7 +389,25 @@ impl PyActionDiscard {
     }
 }
 #[pymethods]
+impl PyActionDiscard {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionDiscard(self.clone()).into();
+        format!("{:?}", action)
+    }
+
+    #[new]
+    fn new(cards: Vec<Card>) -> Self {
+        let hand = Hand::from_iter(cards.into_iter());
+        Self(hand)
+    }
+}
+#[pymethods]
 impl PyActionChangePlayer {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionChangePlayer(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new(id: usize) -> Self {
         Self(PlayerId(id))
