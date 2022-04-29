@@ -16,6 +16,7 @@ use pyo3::{prelude::*, AsPyPointer};
 
 #[pyclass]
 #[pyo3(name = "GameResult")]
+#[derive(Debug)]
 enum PyGameResult {
     Won,
     Lost,
@@ -23,31 +24,33 @@ enum PyGameResult {
 
 #[pyclass]
 struct RegicideGame {
-    state: StateEnum,
+    state: PyState,
     players: Vec<PyPlayer>,
 }
 
+#[pymethods]
 impl RegicideGame {
-    fn generic_playout<const N: usize>(
-        mut players: Vec<PyPlayer>,
-        mut state: State<N>,
-        py: Python,
-    ) -> PyResult<PyGameResult> {
-        loop {
-            if let Some(e) = state.current_enemy() {
-                println!("{}: {:?}", state.reward(), e);
-            }
+    #[new]
+    fn new(players: Vec<PyPlayer>, seed: Option<u64>) -> PyResult<Self> {
+        let state = PyState {
+            state_enum: StateEnum::new(&players, seed)?,
+        };
+        Ok(Self { state, players })
+    }
 
-            let player_id = state.has_turn();
-            let player = players.get_mut(player_id.0).unwrap();
-            let py_state = PyState::from_state(state).into_py(py);
+    fn print(&self) {
+        dbg!(&self.state);
+    }
+
+    fn playout(&mut self, py: Python) -> PyResult<PyGameResult> {
+        loop {
+            let state_enum_clone = self.state.state_enum;
+            let player_id = self.state.has_turn();
+            let player = self.players.get_mut(player_id.unwrap().0).unwrap();
+            let py_state = self.state.clone().into_py(py);
 
             let action = match player {
-                PyPlayer::Rust(rust_player) => match rust_player {
-                    RustPlayer::RandomPlayer(p) => p.play(state),
-                    RustPlayer::InputPlayer(p) => p.play(state),
-                    RustPlayer::MCTSPlayer(p) => p.play(state),
-                },
+                PyPlayer::Rust(rust_player) => rust_player.play(state_enum_clone),
                 PyPlayer::Python(python_obj) => {
                     let args = PyTuple::new(py, &["$self"]);
                     let kwargs = vec![("state", py_state)].into_py_dict(py);
@@ -58,56 +61,23 @@ impl RegicideGame {
                 }
             };
 
-            println!("{:?}\n", action);
-
             // Validate that the chosen action is legal
-            let action_space = state.get_action_space();
+            let action_space = self.state.action_space();
             if !action_space.contains(&action) {
                 return Err(PyKeyError::new_err(format!(
-                    "Action '{:?}' is not a legal move. Legal moves are: {:?}",
+                    "'{:?}' is not a legal action. Legal actions are: {:?}",
                     action, action_space
                 )));
             }
 
-            match state.take_action(&action) {
-                GameStatus::InProgress(new_state) => {
-                    state = new_state;
-                }
-                GameStatus::HasEnded(result) => {
-                    return match result {
-                        GameResult::Won => Ok(PyGameResult::Won),
-                        GameResult::Lost(_) => Ok(PyGameResult::Lost),
-                    };
-                }
-            };
+            if let Some(result) = self.state.state_enum.take_action(&action) {
+                return Ok(result);
+            }
         }
     }
 }
 
-#[pymethods]
-impl RegicideGame {
-    #[new]
-    fn new(players: Vec<PyPlayer>, seed: Option<u64>) -> PyResult<Self> {
-        let state = StateEnum::new(&players, seed)?;
-        Ok(Self { state, players })
-    }
-
-    fn print(&self) {
-        dbg!(&self.state);
-    }
-
-    fn playout(&self, py: Python) -> PyResult<PyGameResult> {
-        let players = self.players.clone();
-        match self.state {
-            StateEnum::Players1(s) => Self::generic_playout(players, s, py),
-            StateEnum::Players2(s) => Self::generic_playout(players, s, py),
-            StateEnum::Players3(s) => Self::generic_playout(players, s, py),
-            StateEnum::Players4(s) => Self::generic_playout(players, s, py),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum StateEnum {
     Players1(State<1>),
     Players2(State<2>),
@@ -126,58 +96,85 @@ impl StateEnum {
         }
     }
 
-    fn action_space(&self) -> Vec<Action> {
+    fn take_action_generic<const N: usize>(
+        x: GameStatus<N>,
+        state: &mut State<N>,
+    ) -> Option<PyGameResult> {
+        match x {
+            GameStatus::InProgress(new_state) => {
+                *state = new_state;
+                None
+            }
+            GameStatus::HasEnded(result) => match result {
+                GameResult::Won => Some(PyGameResult::Won),
+                GameResult::Lost(_) => Some(PyGameResult::Lost),
+            },
+        }
+    }
+
+    fn take_action(&mut self, action: &Action) -> Option<PyGameResult> {
         match self {
+            StateEnum::Players1(s) => Self::take_action_generic(s.take_action(action), s),
+            StateEnum::Players2(s) => Self::take_action_generic(s.take_action(action), s),
+            StateEnum::Players3(s) => Self::take_action_generic(s.take_action(action), s),
+            StateEnum::Players4(s) => Self::take_action_generic(s.take_action(action), s),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+#[pyclass]
+struct PyState {
+    state_enum: StateEnum,
+}
+
+impl PyState {
+    fn action_space(&self) -> Vec<Action> {
+        match self.state_enum {
             StateEnum::Players1(state) => state.get_action_space(),
             StateEnum::Players2(state) => state.get_action_space(),
             StateEnum::Players3(state) => state.get_action_space(),
             StateEnum::Players4(state) => state.get_action_space(),
         }
     }
-
-    fn current_enemy(&self) -> Option<Enemy> {
-        match self {
-            StateEnum::Players1(state) => state.current_enemy(),
-            StateEnum::Players2(state) => state.current_enemy(),
-            StateEnum::Players3(state) => state.current_enemy(),
-            StateEnum::Players4(state) => state.current_enemy(),
-        }
-        .copied()
-    }
 }
 
-#[derive(Clone)]
-#[pyclass]
-struct PyState {
-    // state_enum: StateEnum,
-}
-
+#[pymethods]
 impl PyState {
-    fn from_state<const N: usize>(state: State<N>) -> Self {
-        Self {}
-        // Self {
-        //     state_enum: match N {
-        //         1 => StateEnum::Players1(state.into()),
-        //         _ => todo!(),
-        //     },
-        // }
+    #[pyo3(name = "action_space")]
+    fn py_action_space(&self) -> Vec<PyAction> {
+        self.action_space().iter().map(|&a| a.into()).collect()
+    }
+
+    fn has_turn(&self) -> PyResult<PlayerId> {
+        let id = match self.state_enum {
+            StateEnum::Players1(state) => state.has_turn(),
+            StateEnum::Players2(state) => state.has_turn(),
+            StateEnum::Players3(state) => state.has_turn(),
+            StateEnum::Players4(state) => state.has_turn(),
+        };
+        Ok(id)
+    }
+
+    fn reward(&self) -> u8 {
+        match self.state_enum {
+            StateEnum::Players1(state) => state.reward(),
+            StateEnum::Players2(state) => state.reward(),
+            StateEnum::Players3(state) => state.reward(),
+            StateEnum::Players4(state) => state.reward(),
+        }
+    }
+
+    fn current_enemy(&self) -> PyResult<Option<Enemy>> {
+        let enemy = match self.state_enum {
+            StateEnum::Players1(state) => state.current_enemy().copied(),
+            StateEnum::Players2(state) => state.current_enemy().copied(),
+            StateEnum::Players3(state) => state.current_enemy().copied(),
+            StateEnum::Players4(state) => state.current_enemy().copied(),
+        };
+        Ok(enemy)
     }
 }
-
-// #[pymethods]
-// impl PyState {
-//     fn actions_space(&self) -> Vec<PyAction> {
-//         self.state_enum
-//             .action_space()
-//             .iter()
-//             .map(|&a| a.into())
-//             .collect()
-//     }
-
-//     fn current_enemy(&self) -> PyResult<Option<Enemy>> {
-//         Ok(self.state_enum.current_enemy())
-//     }
-// }
 
 #[derive(Clone, FromPyObject)]
 enum RustPlayer {
@@ -186,16 +183,35 @@ enum RustPlayer {
     MCTSPlayer(MCTSPlayer),
 }
 
-impl AsPyPointer for RustPlayer {
-    fn as_ptr(&self) -> *mut pyo3::ffi::PyObject {
-        todo!()
-    }
-}
-
 #[derive(Clone, FromPyObject)]
 enum PyPlayer {
     Rust(RustPlayer),
     Python(PyObject),
+}
+
+impl RustPlayer {
+    fn play_generic<const N: usize>(&mut self, state: State<N>) -> Action {
+        match self {
+            RustPlayer::RandomPlayer(player) => player.play(state),
+            RustPlayer::InputPlayer(player) => player.play(state),
+            RustPlayer::MCTSPlayer(player) => player.play(state),
+        }
+    }
+
+    fn play(&mut self, state_enum: StateEnum) -> Action {
+        match state_enum {
+            StateEnum::Players1(state) => self.play_generic(state),
+            StateEnum::Players2(state) => self.play_generic(state),
+            StateEnum::Players3(state) => self.play_generic(state),
+            StateEnum::Players4(state) => self.play_generic(state),
+        }
+    }
+}
+
+impl AsPyPointer for RustPlayer {
+    fn as_ptr(&self) -> *mut pyo3::ffi::PyObject {
+        todo!()
+    }
 }
 
 impl IntoPy<PyObject> for PyPlayer {
@@ -292,6 +308,11 @@ struct PyActionChangePlayer(PlayerId);
 
 #[pymethods]
 impl PyActionPlay {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionPlay(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new(card: Card) -> Self {
         Self(card)
@@ -299,6 +320,11 @@ impl PyActionPlay {
 }
 #[pymethods]
 impl PyActionAnimalCombo {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionAnimalCombo(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new(c1: Card, c2: Card) -> Self {
         Self(c1, c2)
@@ -306,6 +332,11 @@ impl PyActionAnimalCombo {
 }
 #[pymethods]
 impl PyActionCombo {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionCombo(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new(cards: Vec<Card>) -> Self {
         let cards_arr = arrayvec::ArrayVecCopy::from_iter(cards.into_iter());
@@ -314,13 +345,36 @@ impl PyActionCombo {
 }
 #[pymethods]
 impl PyActionYield {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionYield(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new() -> Self {
         Self
     }
 }
 #[pymethods]
+impl PyActionDiscard {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionDiscard(self.clone()).into();
+        format!("{:?}", action)
+    }
+
+    #[new]
+    fn new(cards: Vec<Card>) -> Self {
+        let hand = Hand::from_iter(cards.into_iter());
+        Self(hand)
+    }
+}
+#[pymethods]
 impl PyActionChangePlayer {
+    fn __str__(&self) -> String {
+        let action: Action = PyAction::PyActionChangePlayer(self.clone()).into();
+        format!("{:?}", action)
+    }
+
     #[new]
     fn new(id: usize) -> Self {
         Self(PlayerId(id))
