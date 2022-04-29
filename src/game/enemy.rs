@@ -1,6 +1,8 @@
 use super::card::{AttackValue, Card, CardValue};
+use pyo3::prelude::*;
 use std::convert::TryInto;
 
+#[pyclass]
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
 pub struct Enemy {
     card: Card,

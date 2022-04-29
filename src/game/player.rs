@@ -1,4 +1,5 @@
-use super::card::{AttackSum, Hand};
+use crate::game::card::{AttackSum, Hand};
+use pyo3::prelude::*;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
 pub struct PlayerId(pub usize);
@@ -10,6 +11,7 @@ impl PlayerId {
 }
 
 #[derive(Debug, Clone, Copy, Hash)]
+#[pyclass]
 pub struct Player {
     id: PlayerId,
     pub hand: Hand,

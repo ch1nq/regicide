@@ -2,7 +2,11 @@
 name = "regicide-rl"
 version = "0.1.0"
 authors = ["askepen <aske@daske.dk>"]
-edition = "2018"
+edition = "2021"
+
+[lib]
+name = "regicide"
+crate-type = ["cdylib"]
 
 [profile.release]
 debug = true
@@ -12,3 +16,7 @@ rand = "0.8.5"
 itertools = "0.10.2"
 mcts = "0.3.0"
 arrayvec = {git = "https://github.com/pYtoner/arrayvec/", features = ["copy"] }
+pyo3 = { version = "0.16.3", features = ["extension-module"] }
+
+[package.metadata.maturin]
+python-source = "regicide"

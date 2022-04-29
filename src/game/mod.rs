@@ -1,8 +1,8 @@
 pub mod card;
-mod enemy;
-mod player;
+pub mod enemy;
+pub mod player;
 pub mod state;
-mod table;
+pub mod table;
 
 use self::{card::Hand, player::PlayerId};
 use card::Card;
@@ -22,9 +22,7 @@ pub enum GameStatus<const N_PLAYERS: usize> {
     HasEnded(GameResult),
 }
 
-#[derive(Debug)]
-struct Game {}
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Action {
     Play(Card),
     AnimalCombo(Card, Card),

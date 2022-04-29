@@ -1,6 +1,7 @@
 use core::fmt;
 
 use arrayvec::ArrayVecCopy;
+use pyo3::prelude::*;
 
 pub type CardVec = ArrayVecCopy<Card, 54>;
 pub type Hand = ArrayVecCopy<Card, { super::MAX_HAND_SIZE }>;
@@ -23,12 +24,14 @@ impl<const N: usize> FromCardIter for ArrayVecCopy<Card, N> {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[pyclass]
 pub struct Card {
     pub suit: CardSuit,
     pub value: CardValue,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[pyclass]
 pub enum CardSuit {
     Spades,
     Hearts,
@@ -41,6 +44,15 @@ impl CardSuit {
     pub fn all() -> [CardSuit; 4] {
         use CardSuit::*;
         [Spades, Hearts, Diamonds, Clubs]
+    }
+}
+
+#[pymethods]
+impl CardSuit {
+    #[staticmethod]
+    #[pyo3(name = "all")]
+    pub fn py_all() -> Vec<CardSuit> {
+        Self::all().into()
     }
 }
 
@@ -83,6 +95,7 @@ impl PartialOrd for CardSuit {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[pyclass]
 pub enum CardValue {
     Jester,
     Ace,
@@ -112,9 +125,30 @@ impl CardValue {
     }
 }
 
+#[pymethods]
+impl CardValue {
+    #[staticmethod]
+    #[pyo3(name = "numbers")]
+    pub fn py_numbers() -> Vec<CardValue> {
+        Self::numbers().into()
+    }
+
+    #[staticmethod]
+    #[pyo3(name = "royals")]
+    pub fn py_royals() -> Vec<CardValue> {
+        Self::royals().into()
+    }
+}
+
+#[pymethods]
 impl Card {
+    #[new]
     pub fn new(suit: CardSuit, value: CardValue) -> Self {
         Self { suit, value }
+    }
+
+    fn __str__(&self) -> String {
+        format!("{:?}", self)
     }
 }
 
