@@ -62,3 +62,10 @@ impl Enemy {
         self.jester_applied
     }
 }
+
+#[pymethods]
+impl Enemy {
+    fn __str__(&self) -> String {
+        format!("{:?}", self)
+    }
+}
