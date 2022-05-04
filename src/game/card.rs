@@ -153,12 +153,9 @@ impl Card {
 
     fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
         match op {
-            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
             pyo3::pyclass::CompareOp::Eq => Ok(self == other),
             pyo3::pyclass::CompareOp::Ne => Ok(self != other),
-            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
+            _ => Err(PyTypeError::new_err("Operation not supported")),
         }
     }
 }

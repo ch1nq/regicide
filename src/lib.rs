@@ -14,6 +14,19 @@ use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
 use pyo3::types::{IntoPyDict, PyTuple};
 use pyo3::{prelude::*, AsPyPointer};
 
+/// A macro for a match statement that handles calls the same function
+/// for each variant of StateEnum
+macro_rules! state_enum_repeat {
+    ($to_match:expr, $to_repeat:expr) => {
+        match $to_match {
+            StateEnum::Players1(state) => $to_repeat(state),
+            StateEnum::Players2(state) => $to_repeat(state),
+            StateEnum::Players3(state) => $to_repeat(state),
+            StateEnum::Players4(state) => $to_repeat(state),
+        }
+    };
+}
+
 #[pyclass]
 #[pyo3(name = "GameResult")]
 #[derive(Debug)]
@@ -62,7 +75,7 @@ impl RegicideGame {
             };
 
             // Validate that the chosen action is legal
-            let action_space = self.state.action_space();
+            let action_space = state_enum_repeat!(&self.state.state_enum, State::get_action_space);
             if !action_space.contains(&action) {
                 return Err(PyKeyError::new_err(format!(
                     "'{:?}' is not a legal action. Legal actions are: {:?}",
@@ -97,10 +110,10 @@ impl StateEnum {
     }
 
     fn take_action_generic<const N: usize>(
-        x: GameStatus<N>,
         state: &mut State<N>,
+        action: &Action,
     ) -> Option<PyGameResult> {
-        match x {
+        match state.take_action(action) {
             GameStatus::InProgress(new_state) => {
                 *state = new_state;
                 None
@@ -114,10 +127,10 @@ impl StateEnum {
 
     fn take_action(&mut self, action: &Action) -> Option<PyGameResult> {
         match self {
-            StateEnum::Players1(s) => Self::take_action_generic(s.take_action(action), s),
-            StateEnum::Players2(s) => Self::take_action_generic(s.take_action(action), s),
-            StateEnum::Players3(s) => Self::take_action_generic(s.take_action(action), s),
-            StateEnum::Players4(s) => Self::take_action_generic(s.take_action(action), s),
+            StateEnum::Players1(s) => Self::take_action_generic(s, action),
+            StateEnum::Players2(s) => Self::take_action_generic(s, action),
+            StateEnum::Players3(s) => Self::take_action_generic(s, action),
+            StateEnum::Players4(s) => Self::take_action_generic(s, action),
         }
     }
 }
@@ -128,62 +141,31 @@ struct PyState {
     state_enum: StateEnum,
 }
 
-impl PyState {
-    fn action_space(&self) -> Vec<Action> {
-        match self.state_enum {
-            StateEnum::Players1(state) => state.get_action_space(),
-            StateEnum::Players2(state) => state.get_action_space(),
-            StateEnum::Players3(state) => state.get_action_space(),
-            StateEnum::Players4(state) => state.get_action_space(),
-        }
-    }
-}
-
 #[pymethods]
 impl PyState {
-    #[pyo3(name = "action_space")]
-    fn py_action_space(&self) -> Vec<PyAction> {
-        self.action_space().iter().map(|&a| a.into()).collect()
+    fn action_space(&self) -> Vec<PyAction> {
+        state_enum_repeat!(&self.state_enum, State::get_action_space)
+            .iter()
+            .map(|&a| a.into())
+            .collect()
     }
 
     fn has_turn(&self) -> PyResult<PlayerId> {
-        let id = match self.state_enum {
-            StateEnum::Players1(state) => state.has_turn(),
-            StateEnum::Players2(state) => state.has_turn(),
-            StateEnum::Players3(state) => state.has_turn(),
-            StateEnum::Players4(state) => state.has_turn(),
-        };
-        Ok(id)
+        Ok(state_enum_repeat!(&self.state_enum, State::has_turn))
     }
 
     fn current_hand(&self) -> Vec<Card> {
-        match self.state_enum {
-            StateEnum::Players1(state) => state.current_hand(),
-            StateEnum::Players2(state) => state.current_hand(),
-            StateEnum::Players3(state) => state.current_hand(),
-            StateEnum::Players4(state) => state.current_hand(),
-        }
-        .into_iter()
-        .collect()
+        state_enum_repeat!(&self.state_enum, State::current_hand)
+            .into_iter()
+            .collect()
     }
 
     fn reward(&self) -> u8 {
-        match self.state_enum {
-            StateEnum::Players1(state) => state.reward(),
-            StateEnum::Players2(state) => state.reward(),
-            StateEnum::Players3(state) => state.reward(),
-            StateEnum::Players4(state) => state.reward(),
-        }
+        state_enum_repeat!(&self.state_enum, State::reward)
     }
 
     fn current_enemy(&self) -> PyResult<Option<Enemy>> {
-        let enemy = match self.state_enum {
-            StateEnum::Players1(state) => state.current_enemy().copied(),
-            StateEnum::Players2(state) => state.current_enemy().copied(),
-            StateEnum::Players3(state) => state.current_enemy().copied(),
-            StateEnum::Players4(state) => state.current_enemy().copied(),
-        };
-        Ok(enemy)
+        Ok(state_enum_repeat!(&self.state_enum, State::current_enemy).copied())
     }
 }
 
@@ -210,12 +192,7 @@ impl RustPlayer {
     }
 
     fn play(&mut self, state_enum: StateEnum) -> Action {
-        match state_enum {
-            StateEnum::Players1(state) => self.play_generic(state),
-            StateEnum::Players2(state) => self.play_generic(state),
-            StateEnum::Players3(state) => self.play_generic(state),
-            StateEnum::Players4(state) => self.play_generic(state),
-        }
+        state_enum_repeat!(state_enum, |state| self.play_generic(state))
     }
 }
 
@@ -287,176 +264,102 @@ impl IntoPy<PyObject> for PyAction {
     }
 }
 
-#[derive(Clone, PartialEq)]
-#[pyclass]
-#[pyo3(name = "ActionPlay")]
-struct PyActionPlay(Card);
+/// Boilerplate implementation for a PyAction
+macro_rules! define_py_action {
+    (
+        $(#[$struct_meta:meta])*
+        struct $action_name:ident $(( $($field_type:ty),* ))?,
+        $(
+            $(#[$fn_meta:meta])*
+            fn $fn_name:ident($($arg:ident : $arg_type:ty),*) $(-> $fn_return_type:ty)?
+                $fn_body:block
+        )*
+    ) => {
+        #[derive(Clone, PartialEq)]
+        #[pyclass]
+        $(#[$struct_meta])*
+        struct $action_name $(( $($field_type),* ))?;
 
-#[derive(Clone, PartialEq)]
-#[pyclass]
-#[pyo3(name = "ActionAnimalCombo")]
-struct PyActionAnimalCombo(Card, Card);
+        #[pymethods]
+        impl $action_name {
+            $(
+                $(#[$fn_meta])*
+                fn $fn_name($($arg: $arg_type),*) $(-> $fn_return_type)? {
+                    $fn_body
+                }
+            )*
 
-#[derive(Clone, PartialEq)]
-#[pyclass]
-#[pyo3(name = "ActionCombo")]
-struct PyActionCombo(arrayvec::ArrayVecCopy<Card, 4>);
+            fn __str__(&self) -> String {
+                let action: Action = PyAction::$action_name(self.clone()).into();
+                format!("{:?}", action)
+            }
 
-#[derive(Clone, PartialEq)]
-#[pyclass]
-#[pyo3(name = "ActionYield")]
-struct PyActionYield;
+            fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
+                match op {
+                    pyo3::pyclass::CompareOp::Eq => Ok(self == other),
+                    pyo3::pyclass::CompareOp::Ne => Ok(self != other),
+                    _ => Err(PyTypeError::new_err("Operation not supported")),
+                }
+            }
+        }
+    }
+}
 
-#[derive(Clone, PartialEq)]
-#[pyclass]
-#[pyo3(name = "ActionDiscard")]
-struct PyActionDiscard(Hand);
-
-#[derive(Clone, PartialEq)]
-#[pyclass]
-#[pyo3(name = "ActionChangePlayer")]
-struct PyActionChangePlayer(PlayerId);
-
-#[pymethods]
-impl PyActionPlay {
+define_py_action!(
+    #[pyo3(name = "ActionPlay")]
+    struct PyActionPlay(Card),
     #[new]
     fn new(card: Card) -> Self {
         Self(card)
     }
+);
 
-    fn __str__(&self) -> String {
-        let action: Action = PyAction::PyActionPlay(self.clone()).into();
-        format!("{:?}", action)
-    }
-
-    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
-        match op {
-            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
-            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
-            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
-        }
-    }
-}
-#[pymethods]
-impl PyActionAnimalCombo {
+define_py_action!(
+    #[pyo3(name = "ActionAnimalCombo")]
+    struct PyActionAnimalCombo(Card, Card),
     #[new]
     fn new(c1: Card, c2: Card) -> Self {
         Self(c1, c2)
     }
+);
 
-    fn __str__(&self) -> String {
-        let action: Action = PyAction::PyActionAnimalCombo(self.clone()).into();
-        format!("{:?}", action)
-    }
-
-    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
-        match op {
-            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
-            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
-            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
-        }
-    }
-}
-#[pymethods]
-impl PyActionCombo {
+define_py_action!(
+    #[pyo3(name = "ActionCombo")]
+    struct PyActionCombo(arrayvec::ArrayVecCopy<Card, 4>),
     #[new]
     fn new(cards: Vec<Card>) -> Self {
         let cards_arr = arrayvec::ArrayVecCopy::from_iter(cards.into_iter());
         Self(cards_arr)
     }
+);
 
-    fn __str__(&self) -> String {
-        let action: Action = PyAction::PyActionCombo(self.clone()).into();
-        format!("{:?}", action)
-    }
-
-    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
-        match op {
-            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
-            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
-            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
-        }
-    }
-}
-#[pymethods]
-impl PyActionYield {
+define_py_action!(
+    #[pyo3(name = "ActionYield")]
+    struct PyActionYield,
     #[new]
     fn new() -> Self {
         Self
     }
+);
 
-    fn __str__(&self) -> String {
-        let action: Action = PyAction::PyActionYield(self.clone()).into();
-        format!("{:?}", action)
-    }
-
-    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
-        match op {
-            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
-            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
-            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
-        }
-    }
-}
-#[pymethods]
-impl PyActionDiscard {
+define_py_action!(
+    #[pyo3(name = "ActionDiscard")]
+    struct PyActionDiscard(Hand),
     #[new]
     fn new(cards: Vec<Card>) -> Self {
         let hand = Hand::from_iter(cards.into_iter());
         Self(hand)
     }
+);
 
-    fn __str__(&self) -> String {
-        let action: Action = PyAction::PyActionDiscard(self.clone()).into();
-        format!("{:?}", action)
-    }
-
-    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
-        match op {
-            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
-            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
-            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
-        }
-    }
-}
-#[pymethods]
-impl PyActionChangePlayer {
+define_py_action!(
+    #[pyo3(name = "ActionChangePlayer")]
+    struct PyActionChangePlayer(PlayerId),
     #[new]
     fn new(id: usize) -> Self {
         Self(PlayerId(id))
     }
-
-    fn __str__(&self) -> String {
-        let action: Action = PyAction::PyActionChangePlayer(self.clone()).into();
-        format!("{:?}", action)
-    }
-
-    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
-        match op {
-            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
-            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
-            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
-            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
-        }
-    }
-}
+);
 
 /// A Python module implemented in Rust.
 #[pymodule]

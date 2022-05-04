@@ -102,11 +102,6 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
             Action::Combo(cards) => {
                 self.play_cards(Hand::from_card_iter(cards.into_iter().copied()))
             }
-            // Action::Combo2(c1, c2) => self.play_cards(Hand::from_slice(&[*c1, *c2])),
-            // Action::Combo3(c1, c2, c3) => self.play_cards(Hand::from_slice(&[*c1, *c2, *c3])),
-            // Action::Combo4(c1, c2, c3, c4) => {
-            //     self.play_cards(Hand::from_slice(&[*c1, *c2, *c3, *c4]))
-            // }
             Action::Discard(discard_cards) => {
                 self.current_player_mut().hand = self
                     .current_player_mut()
@@ -168,7 +163,7 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
 
         // Step 2: Activate the played card’s suit power
 
-        let suits: Vec<CardSuit> = cards.iter().map(|c| c.suit).collect();
+        let suits: Vec<_> = cards.iter().map(|c| c.suit).collect();
         let enemy_suit = match self.current_enemy() {
             Some(enemy) => enemy.card().suit,
             _ => CardSuit::None,
@@ -286,11 +281,6 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
     }
 
     pub fn reward(&self) -> u8 {
-        // match self.level {
-        //     0..=4 => self.level * 2,
-        //     5..=8 => 8 + (self.level - 4) * 2,
-        //     _ => 20 + (self.level - 8) * 4,
-        // }
         self.level
     }
 
@@ -390,11 +380,6 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
                         combo.into_iter().copied(),
                     ))
                 });
-            // .map(|combo| {
-            //     let mut arr = ArrayVec::<Card, 4>::new();
-            //     arr.extend(combo.into_iter().copied());
-            //     Action::Combo(arr)
-            // });
             actions.extend(combos);
         }
 
@@ -404,7 +389,6 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
 
     pub fn random_permutation(&self, rng: &mut StdRng) -> State<N_PLAYERS> {
         let mut new_state = *self;
-        // let mut rng = new_state.get_rng();
         let mut player_hands = new_state
             .players
             .iter_mut()
@@ -492,9 +476,7 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> Evaluator<MyMCTS<N_PLAYERS,
         GameResult,
     ) {
         let mut node = *state;
-        // let mut rng = node.get_rng();
         let mut rng = rand::rngs::StdRng::from_rng(rand::thread_rng()).unwrap();
-        // dbg!(rng.next_u32());
         node.random_permutation(&mut rng);
         let result;
         loop {
@@ -510,7 +492,6 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> Evaluator<MyMCTS<N_PLAYERS,
                             break;
                         } else {
                             node = new_state;
-                            // node = state.random_permutation(&mut rand);
                         }
                     }
                     GameStatus::HasEnded(res) => {
@@ -580,7 +561,6 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> MCTS for MyMCTS<N_PLAYERS, 
     type ExtraThreadData = ();
     type TreePolicy = UCTPolicy;
     type TranspositionTable = EmptyTable;
-    // type TranspositionTable = ApproxTable<Self>;
 
     fn cycle_behaviour(&self) -> CycleBehaviour<Self> {
         CycleBehaviour::PanicWhenCycleDetected
@@ -589,27 +569,16 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> MCTS for MyMCTS<N_PLAYERS, 
     fn max_playout_length(&self) -> usize {
         1_000
     }
-
-    // fn node_limit(&self) -> usize {
-    //     10_000
-    // }
 }
 
 impl<const N_PLAYERS: usize> std::fmt::Display for State<N_PLAYERS> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // self.table: Table
-        // self.pub players: Vec<Player>
-        // self.has_turn: PlayerId
-        // self.times_yielded: usize
-        // self.max_hand_size: u8
-        // self.action_type: ActionType
         write!(
             f,
             "{}{}{}",
             format!("Player: {:?}\n", self.has_turn()),
             format!("Hand:   {:?}\n", self.current_player().hand),
             format!("Enemy:  {:?}", self.current_enemy()),
-            // format!("{}", self.table),
         )
     }
 }
