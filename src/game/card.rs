@@ -1,7 +1,7 @@
 use core::fmt;
 
 use arrayvec::ArrayVecCopy;
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyTypeError, prelude::*};
 
 pub type CardVec = ArrayVecCopy<Card, 54>;
 pub type Hand = ArrayVecCopy<Card, { super::MAX_HAND_SIZE }>;
@@ -149,6 +149,17 @@ impl Card {
 
     fn __str__(&self) -> String {
         format!("{:?}", self)
+    }
+
+    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
+            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
+            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
+        }
     }
 }
 

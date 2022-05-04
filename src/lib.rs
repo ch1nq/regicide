@@ -10,7 +10,7 @@ use game::{Action, GameResult, GameStatus};
 use players::{
     input_player::InputPlayer, mcts_player::MCTSPlayer, random_player::RandomPlayer, Play,
 };
-use pyo3::exceptions::{PyKeyError, PyValueError};
+use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
 use pyo3::types::{IntoPyDict, PyTuple};
 use pyo3::{prelude::*, AsPyPointer};
 
@@ -156,6 +156,17 @@ impl PyState {
         Ok(id)
     }
 
+    fn current_hand(&self) -> Vec<Card> {
+        match self.state_enum {
+            StateEnum::Players1(state) => state.current_hand(),
+            StateEnum::Players2(state) => state.current_hand(),
+            StateEnum::Players3(state) => state.current_hand(),
+            StateEnum::Players4(state) => state.current_hand(),
+        }
+        .into_iter()
+        .collect()
+    }
+
     fn reward(&self) -> u8 {
         match self.state_enum {
             StateEnum::Players1(state) => state.reward(),
@@ -276,32 +287,32 @@ impl IntoPy<PyObject> for PyAction {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[pyclass]
 #[pyo3(name = "ActionPlay")]
 struct PyActionPlay(Card);
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[pyclass]
 #[pyo3(name = "ActionAnimalCombo")]
 struct PyActionAnimalCombo(Card, Card);
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[pyclass]
 #[pyo3(name = "ActionCombo")]
 struct PyActionCombo(arrayvec::ArrayVecCopy<Card, 4>);
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[pyclass]
 #[pyo3(name = "ActionYield")]
 struct PyActionYield;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[pyclass]
 #[pyo3(name = "ActionDiscard")]
 struct PyActionDiscard(Hand);
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[pyclass]
 #[pyo3(name = "ActionChangePlayer")]
 struct PyActionChangePlayer(PlayerId);
@@ -317,6 +328,17 @@ impl PyActionPlay {
         let action: Action = PyAction::PyActionPlay(self.clone()).into();
         format!("{:?}", action)
     }
+
+    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
+            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
+            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
+        }
+    }
 }
 #[pymethods]
 impl PyActionAnimalCombo {
@@ -328,6 +350,17 @@ impl PyActionAnimalCombo {
     fn __str__(&self) -> String {
         let action: Action = PyAction::PyActionAnimalCombo(self.clone()).into();
         format!("{:?}", action)
+    }
+
+    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
+            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
+            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
+        }
     }
 }
 #[pymethods]
@@ -342,6 +375,17 @@ impl PyActionCombo {
         let action: Action = PyAction::PyActionCombo(self.clone()).into();
         format!("{:?}", action)
     }
+
+    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
+            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
+            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
+        }
+    }
 }
 #[pymethods]
 impl PyActionYield {
@@ -353,6 +397,17 @@ impl PyActionYield {
     fn __str__(&self) -> String {
         let action: Action = PyAction::PyActionYield(self.clone()).into();
         format!("{:?}", action)
+    }
+
+    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
+            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
+            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
+        }
     }
 }
 #[pymethods]
@@ -367,6 +422,17 @@ impl PyActionDiscard {
         let action: Action = PyAction::PyActionDiscard(self.clone()).into();
         format!("{:?}", action)
     }
+
+    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
+            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
+            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
+        }
+    }
 }
 #[pymethods]
 impl PyActionChangePlayer {
@@ -378,6 +444,17 @@ impl PyActionChangePlayer {
     fn __str__(&self) -> String {
         let action: Action = PyAction::PyActionChangePlayer(self.clone()).into();
         format!("{:?}", action)
+    }
+
+    fn __richcmp__(&self, other: &Self, op: pyo3::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            pyo3::pyclass::CompareOp::Lt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Le => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Eq => Ok(self == other),
+            pyo3::pyclass::CompareOp::Ne => Ok(self != other),
+            pyo3::pyclass::CompareOp::Gt => Err(PyTypeError::new_err("Operation not supported")),
+            pyo3::pyclass::CompareOp::Ge => Err(PyTypeError::new_err("Operation not supported")),
+        }
     }
 }
 

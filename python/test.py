@@ -7,7 +7,7 @@ class CustomPlayer():
         pass
 
     def play(self, state):
-        c = card.Card(card.CardSuit.Spades, card.CardValue.Eight)
+        c = card.Card(card.CardSuit.Diamonds, card.CardValue.Six)
         special_action = actions.ActionPlay(c)
 
         legal_actions = state.action_space()
@@ -18,6 +18,8 @@ class CustomPlayer():
             action = random.choice(legal_actions)
 
         print(f"{state.reward()}: {state.current_enemy()}")
+        print([x.__str__() for x in state.current_hand()])
+            
         print(action)
         print()
         
@@ -27,10 +29,10 @@ class CustomPlayer():
             
     
 players = [
-    CustomPlayer
-    # players.MCTSPlayer(n_playouts=1_000, use_heuristics=False)
+    CustomPlayer,
+    # players.MCTSPlayer(n_playouts=10_000, use_heuristics=False),
     # players.InputPlayer(),
-]*3
+]
 
 game = regicide.RegicideGame(players, 1337)
 result = game.playout()

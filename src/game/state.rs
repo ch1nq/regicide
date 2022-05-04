@@ -80,6 +80,10 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
         self.has_turn
     }
 
+    pub fn current_hand(&self) -> Hand {
+        self.current_player().hand
+    }
+
     pub fn take_action(&self, action: &Action) -> GameStatus<N_PLAYERS> {
         let next_state = *self;
         Self::apply_action(next_state, action)
