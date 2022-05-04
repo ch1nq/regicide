@@ -3,8 +3,9 @@ use crate::{
         state::{EmptyTable, MyEvaluator, MyMCTS, State},
         GameResult,
     },
-    Action,
+    Action, PyAction,
 };
+use crate::{PyState, StateEnum};
 use mcts::tree_policy::UCTPolicy;
 use mcts::MCTSManager;
 use pyo3::prelude::*;
@@ -26,6 +27,11 @@ impl MCTSPlayer {
             n_playouts,
             use_heuristics,
         }
+    }
+
+    #[pyo3(name = "play")]
+    fn py_play(&mut self, state: PyState) -> PyAction {
+        self.play_py(state)
     }
 }
 

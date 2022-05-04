@@ -65,9 +65,11 @@ impl RegicideGame {
             let action = match player {
                 PyPlayer::Rust(rust_player) => rust_player.play(state_enum_clone),
                 PyPlayer::Python(python_obj) => {
-                    let args = PyTuple::new(py, &["$self"]);
+                    // let args = PyTuple::new(py, &["$self"]);
+                    let args = PyTuple::empty(py);
                     let kwargs = vec![("state", py_state)].into_py_dict(py);
                     python_obj
+                        // .call_method(py, "play", args, Some(kwargs))?
                         .call_method(py, "play", args, Some(kwargs))?
                         .extract::<PyAction>(py)?
                         .into()
@@ -88,10 +90,14 @@ impl RegicideGame {
             }
         }
     }
+
+    fn reward(&self) -> usize {
+        self.state.reward().into()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
-enum StateEnum {
+pub enum StateEnum {
     Players1(State<1>),
     Players2(State<2>),
     Players3(State<3>),
@@ -137,7 +143,7 @@ impl StateEnum {
 
 #[derive(Clone, Debug)]
 #[pyclass]
-struct PyState {
+pub struct PyState {
     state_enum: StateEnum,
 }
 
@@ -212,7 +218,7 @@ impl IntoPy<PyObject> for PyPlayer {
 }
 
 #[derive(Clone, FromPyObject)]
-enum PyAction {
+pub enum PyAction {
     PyActionPlay(PyActionPlay),
     PyActionAnimalCombo(PyActionAnimalCombo),
     PyActionCombo(PyActionCombo),
@@ -278,7 +284,7 @@ macro_rules! define_py_action {
         #[derive(Clone, PartialEq)]
         #[pyclass]
         $(#[$struct_meta])*
-        struct $action_name $(( $($field_type),* ))?;
+        pub struct $action_name $(( $($field_type),* ))?;
 
         #[pymethods]
         impl $action_name {
