@@ -528,7 +528,6 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> Evaluator<MyMCTS<N_PLAYERS,
 }
 
 use mcts::transposition_table::{TranspositionHash, TranspositionTable};
-use mcts::tree_policy::{TreePolicy, UCTPolicy};
 use mcts::CycleBehaviour;
 
 #[derive(Default)]

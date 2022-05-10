@@ -7,7 +7,6 @@ use crate::{
     Action, PyAction,
 };
 use itertools::Itertools;
-use mcts::tree_policy::UCTPolicy;
 use mcts::MCTSManager;
 use pyo3::prelude::*;
 
