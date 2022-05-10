@@ -1,6 +1,7 @@
 use super::card::{AttackSum, Card, CardSuit, CardValue, FromCardIter, Hand};
 use super::enemy::Enemy;
 use super::player::{Player, PlayerId};
+use super::policy::MyPolicy;
 use super::table::Table;
 use crate::error::RegicideError;
 use crate::game::{Action, GameResult, GameStatus};
@@ -527,7 +528,7 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> Evaluator<MyMCTS<N_PLAYERS,
 }
 
 use mcts::transposition_table::{TranspositionHash, TranspositionTable};
-use mcts::tree_policy::UCTPolicy;
+use mcts::tree_policy::{TreePolicy, UCTPolicy};
 use mcts::CycleBehaviour;
 
 #[derive(Default)]
@@ -559,15 +560,40 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> MCTS for MyMCTS<N_PLAYERS, 
     type Eval = MyEvaluator<N_PLAYERS>;
     type NodeData = ();
     type ExtraThreadData = ();
-    type TreePolicy = UCTPolicy;
+    type TreePolicy = MyPolicy;
     type TranspositionTable = EmptyTable;
+
+    fn max_playout_length(&self) -> usize {
+        1_000
+    }
 
     fn cycle_behaviour(&self) -> CycleBehaviour<Self> {
         CycleBehaviour::PanicWhenCycleDetected
     }
 
-    fn max_playout_length(&self) -> usize {
-        1_000
+    fn visits_before_expansion(&self) -> u64 {
+        1
+    }
+
+    fn node_limit(&self) -> usize {
+        std::usize::MAX
+    }
+
+    fn select_child_after_search<'a>(
+        &self,
+        children: &'a [mcts::MoveInfo<Self>],
+    ) -> &'a mcts::MoveInfo<Self> {
+        children
+            .into_iter()
+            .max_by_key(|child| child.visits())
+            .unwrap()
+    }
+
+    fn on_backpropagation(
+        &self,
+        _evaln: &mcts::StateEvaluation<Self>,
+        _handle: SearchHandle<Self>,
+    ) {
     }
 }
 

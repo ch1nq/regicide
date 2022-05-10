@@ -1,6 +1,7 @@
 pub mod card;
 pub mod enemy;
 pub mod player;
+pub mod policy;
 pub mod state;
 pub mod table;
 
