@@ -1,4 +1,6 @@
 flamegraph.svg
+data/
+plots/
 
 /target
 
