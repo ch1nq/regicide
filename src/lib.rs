@@ -14,15 +14,15 @@ use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
 use pyo3::types::{IntoPyDict, PyTuple};
 use pyo3::{prelude::*, AsPyPointer};
 
-/// A macro for a match statement that handles calls the same function
-/// for each variant of StateEnum
+/// A macro for a match statement that calls the same function
+/// with the inner state for each variant of StateEnum
 macro_rules! state_enum_repeat {
-    ($to_match:expr, $to_repeat:expr) => {
+    ($to_match:expr, $to_repeat:expr $(, $additional_args:expr)*) => {
         match $to_match {
-            StateEnum::Players1(state) => $to_repeat(state),
-            StateEnum::Players2(state) => $to_repeat(state),
-            StateEnum::Players3(state) => $to_repeat(state),
-            StateEnum::Players4(state) => $to_repeat(state),
+            StateEnum::Players1(state) => $to_repeat(state $(, $additional_args)*),
+            StateEnum::Players2(state) => $to_repeat(state $(, $additional_args)*),
+            StateEnum::Players3(state) => $to_repeat(state $(, $additional_args)*),
+            StateEnum::Players4(state) => $to_repeat(state $(, $additional_args)*),
         }
     };
 }
@@ -132,12 +132,7 @@ impl StateEnum {
     }
 
     fn take_action(&mut self, action: &Action) -> Option<PyGameResult> {
-        match self {
-            StateEnum::Players1(s) => Self::take_action_generic(s, action),
-            StateEnum::Players2(s) => Self::take_action_generic(s, action),
-            StateEnum::Players3(s) => Self::take_action_generic(s, action),
-            StateEnum::Players4(s) => Self::take_action_generic(s, action),
-        }
+        state_enum_repeat!(self, StateEnum::take_action_generic, action)
     }
 }
 
@@ -173,6 +168,13 @@ impl PyState {
     fn current_enemy(&self) -> PyResult<Option<Enemy>> {
         Ok(state_enum_repeat!(&self.state_enum, State::current_enemy).copied())
     }
+
+    fn __str__(&self) -> String {
+        fn state_to_string<const N: usize>(state: &State<N>) -> String {
+            format!("{}", state)
+        }
+        state_enum_repeat!(&self.state_enum, state_to_string)
+    }
 }
 
 #[derive(Clone, FromPyObject)]
@@ -191,9 +193,9 @@ enum PyPlayer {
 impl RustPlayer {
     fn play_generic<const N: usize>(&mut self, state: State<N>) -> Action {
         match self {
-            RustPlayer::RandomPlayer(player) => player.play(state),
-            RustPlayer::InputPlayer(player) => player.play(state),
-            RustPlayer::MCTSPlayer(player) => player.play(state),
+            RustPlayer::RandomPlayer(player) => Play::play(player, state),
+            RustPlayer::InputPlayer(player) => Play::play(player, state),
+            RustPlayer::MCTSPlayer(player) => Play::play(player, state),
         }
     }
 
@@ -296,6 +298,11 @@ macro_rules! define_py_action {
             )*
 
             fn __str__(&self) -> String {
+                let action: Action = PyAction::$action_name(self.clone()).into();
+                format!("{:?}", action)
+            }
+
+            fn __repr__(&self) -> String {
                 let action: Action = PyAction::$action_name(self.clone()).into();
                 format!("{:?}", action)
             }

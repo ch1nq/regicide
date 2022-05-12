@@ -1,3 +1,4 @@
+use crate::game::policy::MyPolicy;
 use crate::PyState;
 use crate::{
     game::{
@@ -18,22 +19,46 @@ pub struct MCTSPlayer {
     playouts: u32,
     num_threads: usize,
     use_heuristics: bool,
+    policy_variation: Option<u8>,
+    ranked_actions: Option<Vec<(Action, u64, f64)>>,
 }
 
 #[pymethods]
 impl MCTSPlayer {
     #[new]
-    fn new(playouts: u32, num_threads: usize, use_heuristics: bool) -> Self {
+    fn new(
+        playouts: u32,
+        num_threads: usize,
+        use_heuristics: bool,
+        policy_variation: Option<u8>,
+    ) -> Self {
         Self {
             playouts,
             num_threads,
             use_heuristics,
+            policy_variation,
+            ranked_actions: None,
         }
     }
 
-    #[pyo3(name = "play")]
-    fn py_play(&mut self, state: PyState) -> PyAction {
+    /// Choose an action based on the given state
+    fn play(&mut self, state: PyState) -> PyAction {
         self.play_py(state)
+    }
+
+    /// List actions with associated stats, sorted by most visits in the MCTS.
+    /// The first Action in the list is considered the best move to play, and is
+    /// also what `play()` will return.
+    ///
+    /// Updates on calls to `play()`.
+    ///
+    /// # Returns
+    /// List of tuples in the form `(action, visits, avg_reward)`
+    fn ranked_actions(&self) -> Vec<(PyAction, u64, f64)> {
+        match &self.ranked_actions {
+            Some(vec) => vec.iter().map(|&a| (a.0.into(), a.1, a.2)).collect(),
+            None => vec![],
+        }
     }
 }
 
@@ -51,11 +76,18 @@ impl MCTSPlayer {
         &mut self,
         state: State<N_PLAYERS>,
     ) -> Action {
-        // let policy = crate::game::policy::MyPolicy::UCTBase {
-        //     exploration_constant: GameResult::max_score() as f64 / f64::sqrt(2_f64),
-        // };
-        let policy = crate::game::policy::MyPolicy::UCTVariation4 {
-            max_score: GameResult::max_score() as u64,
+        let policy = match self.policy_variation {
+            None | Some(0) => MyPolicy::UCTBase {
+                exploration_constant: GameResult::max_score() as f64 / f64::sqrt(2_f64),
+            },
+            Some(3) => MyPolicy::UCTVariation3 {
+                max_score: GameResult::max_score() as f64,
+                delta: 1e-3,
+            },
+            Some(4) => MyPolicy::UCTVariation4 {
+                max_score: GameResult::max_score() as f64,
+            },
+            Some(num) => panic!("Could not determine policy from number '{num}'"),
         };
 
         let mut mcts = MCTSManager::new(
@@ -67,18 +99,25 @@ impl MCTSPlayer {
         );
         mcts.playout_n_parallel(self.playouts, self.num_threads);
 
-        // Print top 10 moves
         let root = mcts.tree().root_node();
-        let mut moves = root.moves().into_iter().collect_vec();
-        moves.sort_by_key(|x| -(x.visits() as i64));
+        let mut actions = root.moves().into_iter().collect_vec();
+        actions.sort_by_key(|action| -action.sum_rewards());
+        actions.sort_by_key(|action| -(action.visits() as i64));
 
-        println!();
-        print!("  ---->");
-        for mov in moves.iter().take(3) {
-            println!("\t{:?}", mov);
-        }
-        println!();
+        // Store ranked moves
+        self.ranked_actions = Some(
+            actions
+                .iter()
+                .map(|a| {
+                    (
+                        *a.get_move(),
+                        a.visits(),
+                        a.sum_rewards() as f64 / a.visits() as f64,
+                    )
+                })
+                .collect(),
+        );
 
-        mcts.best_move().expect("There should be a best move")
+        *actions[0].get_move()
     }
 }

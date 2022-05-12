@@ -30,24 +30,30 @@ class CustomPlayer:
 class CustomMCTSPlayer:
     def __init__(self) -> None:
         self.base = regicide.players.MCTSPlayer(
-            playouts=1000, use_heuristics=True, num_threads=4
+            playouts=1000, use_heuristics=True, num_threads=4, policy_variation=4
         )
 
     def play(self, state):
-        action = self.base.play(state)
-        print(f"{state.reward()} -> {action}")
-        return action
+        print(state)
+        print("Top actions: ")
+        best_action = self.base.play(state)
+
+        
+        for i, action_info in enumerate(self.base.ranked_actions()[:10]): 
+            prefix = "->" if i == 0 else "  "
+            print(f"{prefix} {i}: {action_info}")
+        
+        print()
+        return best_action
 
 
 players = [
     CustomMCTSPlayer(),
-    CustomMCTSPlayer(),
-    CustomMCTSPlayer(),
     # CustomPlayer(),
-    # players.MCTSPlayer(n_playouts=1_000, use_heuristics=False),
+    # players.MCTSPlayer(playouts=1_000, num_threads=4, use_heuristics=False),
     # players.InputPlayer(),
 ]
 
-game = regicide.RegicideGame(players)
+game = regicide.RegicideGame(players, seed=1337)
 result = game.playout()
 print(f"{result = }, reward = {game.reward()}")

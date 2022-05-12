@@ -1,4 +1,3 @@
-from operator import contains
 import regicide
 from tqdm import tqdm
 import seaborn as sns
@@ -6,32 +5,39 @@ from matplotlib import pyplot as plt
 import os
 import pandas as pd
 from typing import Dict, List
-from multiprocessing import Process, Queue
+from multiprocessing import Pool, Queue
 
 DATA_PATH = "data"
 PLOT_PATH = "plots"
 CSV_PATH = os.path.join(DATA_PATH, "games_gridsearch.csv")
-COLUMNS = ["score", "agent", "player_count"]
+COLUMNS = ["score", "agent", "player_count", "tree_policy"]
 
 
-def generate_data(mcts_playouts, player_count, samples, queue=None):
+def generate_data(kwargs, queue=None):
+    mcts_playouts = kwargs["mcts_playouts"]
+    player_count = kwargs["player_count"]
+    samples = kwargs["samples"]
+    policy_variation = kwargs["policy_variation"]
+
     agent = f"MCTS_{mcts_playouts}"
-    print(f"Started: {agent}, p: {player_count}")
     data = pd.DataFrame(columns=COLUMNS)
-    for _ in range(samples):
-        gamers = [
-            regicide.players.MCTSPlayer(
-                playouts=mcts_playouts,
-                num_threads=4,
-                use_heuristics=False,
-            ),
-        ] * player_count
+    
+    # for _ in range(samples):
+    gamers = [
+        regicide.players.MCTSPlayer(
+            playouts=mcts_playouts,
+            num_threads=1,
+            use_heuristics=False,
+            policy_variation=policy_variation
+        ),
+    ] * player_count
 
-        game = regicide.RegicideGame(gamers, None)
-        game.playout()
+    game = regicide.RegicideGame(gamers, None)
+    game.playout()
 
-        row = pd.DataFrame([[game.reward(), agent, player_count]], columns=COLUMNS)
-        data = pd.concat([data, row])
+    row = pd.DataFrame([[game.reward(), agent, player_count, policy_variation]], columns=COLUMNS)
+    data = pd.concat([data, row])
+    
     if queue is None:
         return data
     else:
@@ -39,27 +45,17 @@ def generate_data(mcts_playouts, player_count, samples, queue=None):
 
 
 def generate_data_gridsearch(samples) -> pd.DataFrame:
-    queue = Queue()
-    processes = []
+    args = []
     for mcts_playouts in [10 ** i for i in range(1, 5)]:
         for player_count in range(1, 5):
-            processes.append(
-                Process(
-                    target=generate_data,
-                    kwargs={
+            for policy_variation in [0,3,4]:
+                for _ in range(samples):
+                    args.append({
                         "player_count": player_count,
                         "mcts_playouts": mcts_playouts,
                         "samples": samples,
-                        "queue": queue,
-                    },
-                )
-            )
-
-    for p in processes:
-        p.start()
-
-    for p in processes:
-        p.join()
+                        "policy_variation": policy_variation,
+                    })
 
     if not os.path.exists(DATA_PATH):
         os.mkdir(DATA_PATH)
@@ -69,8 +65,9 @@ def generate_data_gridsearch(samples) -> pd.DataFrame:
     else:
         data = pd.DataFrame(columns=COLUMNS)
 
-    while not queue.empty():
-        data = pd.concat([data, queue.get()])
+    with Pool(8) as pool:
+        new_data = list(tqdm(pool.imap(generate_data, args), total=len(args)))
+        data = pd.concat([data] + new_data)
 
     data.to_csv(CSV_PATH, index=False)
 
@@ -132,6 +129,33 @@ def plot():
     plt.savefig(os.path.join(PLOT_PATH, "hist_player_counts.png"), dpi=300)
     plt.clf()
 
+    # Performance of MCTS_1000 agent in across different player counts
+    subset = make_subset(data, "tree_policy", {"agent": ["MCTS_1000"], "tree_policy": [0,1,2,3,4]})
+    sns.histplot(
+        data=subset,
+        x="score",
+        hue="tree_policy",
+        # discrete=True,
+        # element="step",
+        multiple="dodge",
+        kde=True,
+        stat="density",
+        common_norm=False,
+        # common_norm=False,
+    )
+    # sns.kdeplot(
+    #     data=subset,
+    #     x="score",
+    #     hue="tree_policy",
+    #     linewidth=1,
+    #     bw_adjust=1.5,
+    #     common_norm=False,
+    #     alpha=1.0,
+    #     clip=(0, 12),
+    # )
+    plt.savefig(os.path.join(PLOT_PATH, "hist_policies.png"), dpi=300)
+    plt.clf()
+
     # Performance of different MCTS agents across different player counts
     subset = data.groupby(["agent", "player_count"]).mean().reset_index()
     subset = subset.pivot("agent", "player_count", "score")
@@ -155,6 +179,7 @@ def plot():
     plt.clf()
 
 
+
 if __name__ == "__main__":
-    # generate_data_gridsearch(100)
+    generate_data_gridsearch(10)
     plot()
