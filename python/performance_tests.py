@@ -4,7 +4,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 import os
 import pandas as pd
-from typing import Dict, List
+from typing import Dict, List, Optional
 from multiprocessing import Pool, Queue
 
 DATA_PATH = "data"
@@ -12,21 +12,16 @@ PLOT_PATH = "plots"
 CSV_PATH = os.path.join(DATA_PATH, "games_gridsearch.csv")
 COLUMNS = ["score", "agent", "player_count", "tree_policy"]
 
-
-def generate_data(kwargs, queue=None):
+def single_playout(kwargs) -> pd.DataFrame:
     mcts_playouts = kwargs["mcts_playouts"]
     player_count = kwargs["player_count"]
-    samples = kwargs["samples"]
     policy_variation = kwargs["policy_variation"]
-
     agent = f"MCTS_{mcts_playouts}"
-    data = pd.DataFrame(columns=COLUMNS)
     
-    # for _ in range(samples):
     gamers = [
         regicide.players.MCTSPlayer(
             playouts=mcts_playouts,
-            num_threads=1,
+            num_threads=8,
             use_heuristics=False,
             policy_variation=policy_variation
         ),
@@ -35,8 +30,15 @@ def generate_data(kwargs, queue=None):
     game = regicide.RegicideGame(gamers, None)
     game.playout()
 
-    row = pd.DataFrame([[game.reward(), agent, player_count, policy_variation]], columns=COLUMNS)
-    data = pd.concat([data, row])
+    return pd.DataFrame([[game.reward(), agent, player_count, policy_variation]], columns=COLUMNS)
+
+
+def generate_data(kwargs, queue=None) -> Optional[pd.DataFrame]:
+    data = pd.DataFrame(columns=COLUMNS)
+    
+    for _ in tqdm(range(kwargs["samples"])):
+        row = single_playout(kwargs)
+        data = pd.concat([data, row])
     
     if queue is None:
         return data
@@ -179,7 +181,22 @@ def plot():
     plt.clf()
 
 
-
 if __name__ == "__main__":
-    generate_data_gridsearch(10)
-    plot()
+    # generate_data_gridsearch(10)
+    # plot()
+
+    samples = 100
+    results = generate_data({
+        "player_count": 3,
+        "mcts_playouts": 1000,
+        "samples": samples,
+        "policy_variation": 0,
+    })
+    print(results["score"].mean())
+    results = generate_data({
+        "player_count": 3,
+        "mcts_playouts": 1000,
+        "samples": samples,
+        "policy_variation": 1,
+    })
+    print(results["score"].mean())

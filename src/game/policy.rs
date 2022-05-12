@@ -36,7 +36,7 @@ impl<Spec: MCTS<TreePolicy = Self>> TreePolicy<Spec> for MyPolicy {
                 // mean action value
                 let mu_i = mov.sum_rewards() as f64 / n_i as f64;
 
-                // Helper aliases to be used in math below
+                // Aliases to simplify math below
                 let sqrt = f64::sqrt;
                 let ln = f64::ln;
 

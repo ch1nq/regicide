@@ -78,7 +78,7 @@ impl MCTSPlayer {
     ) -> Action {
         let policy = match self.policy_variation {
             None | Some(0) => MyPolicy::UCTBase {
-                exploration_constant: GameResult::max_score() as f64 / f64::sqrt(2_f64),
+                exploration_constant: GameResult::max_score() as f64,
             },
             Some(3) => MyPolicy::UCTVariation3 {
                 max_score: GameResult::max_score() as f64,
