@@ -1,6 +1,7 @@
 use core::fmt;
 
 use arrayvec::ArrayVecCopy;
+use colored::Colorize;
 use pyo3::{exceptions::PyTypeError, prelude::*};
 
 pub type CardVec = ArrayVecCopy<Card, 54>;
@@ -192,14 +193,15 @@ impl fmt::Debug for CardSuit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use CardSuit::*;
         let suit = match self {
-            Spades => "♠",
-            Hearts => "♥",
-            Diamonds => "♦",
-            Clubs => "♣",
-            _ => "",
-        };
+            Spades => "♠".black(),
+            Hearts => "♥".red(),
+            Diamonds => "♦".red(),
+            Clubs => "♣".black(),
+            _ => "".into(),
+        }
+        .on_white();
 
-        write!(f, "{}", suit)
+        write!(f, "{suit}")
     }
 }
 
@@ -221,7 +223,9 @@ impl fmt::Debug for CardValue {
             Jack => "J",
             Queen => "Q",
             King => "K",
-        };
+        }
+        .black()
+        .on_white();
 
         write!(f, "{}", value)
     }
