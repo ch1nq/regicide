@@ -1,11 +1,11 @@
+use super::Play;
 use crate::{game::state::State, Action};
+use crate::{PyAction, PyState};
 use pyo3::prelude::*;
 use rand::{
     prelude::{SliceRandom, StdRng},
     SeedableRng,
 };
-
-use super::Play;
 
 #[derive(Clone)]
 #[pyclass]
@@ -28,5 +28,9 @@ impl RandomPlayer {
             None => StdRng::from_rng(rand::thread_rng()).unwrap(),
         };
         Self { rng }
+    }
+
+    fn play(&mut self, state: PyState) -> PyAction {
+        self.play_py(state)
     }
 }
