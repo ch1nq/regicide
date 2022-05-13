@@ -1,6 +1,6 @@
 [package]
 name = "regicide-rl"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["askepen <aske@daske.dk>"]
 edition = "2021"
 
