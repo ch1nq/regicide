@@ -6,6 +6,7 @@ use mcts::{
 #[derive(Clone, Debug)]
 pub enum MyPolicy {
     UCTBase { exploration_constant: f64 },
+    UCTVariation2 { max_score: f64, delta: f64 },
     UCTVariation3 { max_score: f64, delta: f64 },
     UCTVariation4 { max_score: f64 },
 }
@@ -47,6 +48,15 @@ impl<Spec: MCTS<TreePolicy = Self>> TreePolicy<Spec> for MyPolicy {
                     } => {
                         let explore_term = sqrt(2.0 * ln(N_i) / n_i);
                         mu_i + exploration_constant * explore_term
+                    }
+                    MyPolicy::UCTVariation2 { max_score, delta } => {
+                        todo!()
+                        // let numerator = (1.0 + 1.0 / n_i) * ln(sqrt(n_i + 1.0) / delta);
+                        // let denominator = 2.0 * n_i;
+                        // let beta = |n_i, delta| {
+                        //     ln(L / delta) + 3.0 * ln(ln(L / 8.0)) + 3.0 / 2.0 * ln(ln(n_i) + 1.0)
+                        // };
+                        // mu_i + max_score * sqrt(beta(n_i, delta) / denominator)
                     }
                     MyPolicy::UCTVariation3 { max_score, delta } => {
                         let numerator = (1.0 + 1.0 / n_i) * ln(sqrt(n_i + 1.0) / delta);

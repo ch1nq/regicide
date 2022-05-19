@@ -227,6 +227,7 @@ pub enum PyAction {
     PyActionYield(PyActionYield),
     PyActionDiscard(PyActionDiscard),
     PyActionChangePlayer(PyActionChangePlayer),
+    PyActionRefillHand(PyActionRefillHand),
 }
 
 impl Into<Action> for PyAction {
@@ -240,6 +241,7 @@ impl Into<Action> for PyAction {
             PyAction::PyActionCombo(PyActionCombo(cards)) => Action::Combo(cards),
             PyAction::PyActionDiscard(PyActionDiscard(hand)) => Action::Discard(hand),
             PyAction::PyActionChangePlayer(PyActionChangePlayer(id)) => Action::ChangePlayer(id),
+            PyAction::PyActionRefillHand(PyActionRefillHand) => Action::RefillHand,
         }
     }
 }
@@ -255,6 +257,7 @@ impl From<Action> for PyAction {
             Action::Combo(cards) => PyAction::PyActionCombo(PyActionCombo(cards)),
             Action::Discard(hand) => PyAction::PyActionDiscard(PyActionDiscard(hand)),
             Action::ChangePlayer(id) => PyAction::PyActionChangePlayer(PyActionChangePlayer(id)),
+            Action::RefillHand => PyAction::PyActionRefillHand(PyActionRefillHand),
         }
     }
 }
@@ -268,6 +271,7 @@ impl IntoPy<PyObject> for PyAction {
             PyAction::PyActionCombo(inner) => inner.into_py(py),
             PyAction::PyActionDiscard(inner) => inner.into_py(py),
             PyAction::PyActionChangePlayer(inner) => inner.into_py(py),
+            PyAction::PyActionRefillHand(inner) => inner.into_py(py),
         }
     }
 }
@@ -371,6 +375,15 @@ define_py_action!(
     #[new]
     fn new(id: usize) -> Self {
         Self(PlayerId(id))
+    }
+);
+
+define_py_action!(
+    #[pyo3(name = "ActionRefillHand")]
+    struct PyActionRefillHand,
+    #[new]
+    fn new() -> Self {
+        Self
     }
 );
 

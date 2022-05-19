@@ -31,6 +31,7 @@ pub enum Action {
     Yield,
     Discard(Hand),
     ChangePlayer(PlayerId),
+    RefillHand,
 }
 
 impl GameResult {

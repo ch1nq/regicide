@@ -72,6 +72,10 @@ impl Table {
         self.discard_pile.push(card);
     }
 
+    pub fn discard_cards(&mut self, cards: Hand) {
+        self.discard_pile.extend(cards);
+    }
+
     pub fn add_attack_cards<T>(&mut self, cards: T)
     where
         T: IntoIterator<Item = Card> + Sized,

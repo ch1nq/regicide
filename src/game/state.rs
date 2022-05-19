@@ -25,6 +25,7 @@ pub struct State<const N_PLAYERS: usize> {
     has_ended: Option<GameResult>,
     level: u8,
     rng_seed: u64,
+    hand_refills_left: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
@@ -50,11 +51,11 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
 
     pub fn new(seed: Option<u64>) -> Result<Self, RegicideError> {
         let mut rng = Self::new_rng(seed);
-        let (n_jesters, max_hand_size) = match N_PLAYERS {
-            1 => (0, 8),
-            2 => (0, 7),
-            3 => (1, 6),
-            4 => (2, 5),
+        let (n_jesters, max_hand_size, hand_refills_left) = match N_PLAYERS {
+            1 => (0, 8, 2),
+            2 => (0, 7, 0),
+            3 => (1, 6, 0),
+            4 => (2, 5, 0),
             _ => return Err(RegicideError::WrongNumberOfPlayers),
         };
         let mut table = Table::new(n_jesters, &mut rng);
@@ -74,6 +75,7 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
             has_ended: None,
             level: 0,
             rng_seed: rng.next_u64(),
+            hand_refills_left,
         })
     }
 
@@ -92,7 +94,7 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
 
     fn apply_action(mut self, action: &Action) -> GameStatus<N_PLAYERS> {
         self.times_yielded = match action {
-            Action::Discard(_) => self.times_yielded,
+            Action::Discard(_) | Action::RefillHand => self.times_yielded,
             Action::Yield => self.times_yielded + 1,
             _ => 0,
         };
@@ -111,6 +113,7 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
                     .filter(|&card| !discard_cards.iter().contains(&card))
                     .copied()
                     .collect();
+                self.table.discard_cards(*discard_cards);
 
                 self.action_type = ActionType::PlayCards;
                 self.next_player();
@@ -127,6 +130,13 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
             Action::ChangePlayer(id) => {
                 self.has_turn = *id;
                 self.action_type = ActionType::PlayCards;
+                GameStatus::InProgress(self)
+            }
+            Action::RefillHand => {
+                self.hand_refills_left -= 1;
+                let hand = self.current_player_mut().hand;
+                self.table.discard_cards(hand);
+                self.current_player_mut().hand = self.table.draw_cards(self.max_hand_size.into());
                 GameStatus::InProgress(self)
             }
         }
@@ -300,11 +310,22 @@ impl<const N_PLAYERS: usize> State<N_PLAYERS> {
     pub fn get_action_space(&self) -> Vec<Action> {
         let player = self.current_player();
 
-        match self.action_type {
+        let mut actions = match self.action_type {
             ActionType::Discard(amount) => self.discard_actions(player, amount),
             ActionType::PlayCards => self.attack_actions(player),
             ActionType::Jester => self.jester_actions(),
+        };
+
+        // RefillHand is only appriate to play in single player games, when
+        // either the player is discarding or about to play card. Since there
+        // are no jesters in the game when there is only one player, ActionType
+        // can never be Jester and it is safe to assume that we either at the
+        // Discard or PlayCards stage.
+        if N_PLAYERS == 1 && self.hand_refills_left > 0 {
+            actions.push(Action::RefillHand)
         }
+
+        actions
     }
 
     fn jester_actions(&self) -> Vec<Action> {
@@ -586,13 +607,6 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> MCTS for MyMCTS<N_PLAYERS, 
             .into_iter()
             .max_by_key(|child| child.visits())
             .unwrap()
-    }
-
-    fn on_backpropagation(
-        &self,
-        _evaln: &mcts::StateEvaluation<Self>,
-        _handle: SearchHandle<Self>,
-    ) {
     }
 }
 
