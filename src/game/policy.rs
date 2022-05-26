@@ -27,6 +27,10 @@ impl<Spec: MCTS<TreePolicy = Self>> TreePolicy<Spec> for MyPolicy {
         #[allow(non_snake_case)]
         let N_i = moves.clone().map(|x| x.visits()).sum::<u64>() as f64 + 1.0;
 
+        // number of leaf nodes:
+        // number of child nodes that don't have any children?
+        let leaf_node_count = moves.clone().filter(|x| x.child().is_none()).count() as f64 + 1.0;
+
         handle
             .thread_data()
             .policy_data
@@ -42,31 +46,33 @@ impl<Spec: MCTS<TreePolicy = Self>> TreePolicy<Spec> for MyPolicy {
                 let ln = f64::ln;
 
                 match self {
+                    // Avoid dividing by 0
                     _ if n_i == 0.0 => std::f64::INFINITY,
+
                     MyPolicy::UCTBase {
                         exploration_constant,
                     } => {
                         let explore_term = sqrt(2.0 * ln(N_i) / n_i);
                         mu_i + exploration_constant * explore_term
                     }
+
                     MyPolicy::UCTVariation2 { max_score, delta } => {
-                        todo!()
-                        // let numerator = (1.0 + 1.0 / n_i) * ln(sqrt(n_i + 1.0) / delta);
-                        // let denominator = 2.0 * n_i;
-                        // let beta = |n_i, delta| {
-                        //     ln(L / delta) + 3.0 * ln(ln(L / 8.0)) + 3.0 / 2.0 * ln(ln(n_i) + 1.0)
-                        // };
-                        // mu_i + max_score * sqrt(beta(n_i, delta) / denominator)
+                        let beta = |n_i, delta| {
+                            ln(leaf_node_count / delta)
+                                + 3.0 * ln(ln(leaf_node_count / delta))
+                                + 3.0 / 2.0 * ln(ln(n_i) + 1.0)
+                        };
+                        mu_i + max_score * sqrt(beta(n_i, delta) / (2.0 * n_i))
                     }
+
                     MyPolicy::UCTVariation3 { max_score, delta } => {
                         let numerator = (1.0 + 1.0 / n_i) * ln(sqrt(n_i + 1.0) / delta);
-                        let denominator = 2.0 * n_i;
-                        mu_i + max_score * sqrt(numerator / denominator)
+                        mu_i + max_score * sqrt(numerator / (2.0 * n_i))
                     }
+
                     MyPolicy::UCTVariation4 { max_score } => {
                         let numerator = ln(N_i) + (3.0 * ln(ln(N_i) + 1.0));
-                        let denominator = 2.0 * n_i;
-                        mu_i + max_score * sqrt(numerator / denominator)
+                        mu_i + max_score * sqrt(numerator / (2.0 * n_i))
                     }
                 }
             })

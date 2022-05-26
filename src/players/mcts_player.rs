@@ -80,6 +80,10 @@ impl MCTSPlayer {
             None | Some(0) => MyPolicy::UCTBase {
                 exploration_constant: GameResult::max_score() as f64,
             },
+            Some(2) => MyPolicy::UCTVariation2 {
+                max_score: GameResult::max_score() as f64,
+                delta: 1e-3,
+            },
             Some(3) => MyPolicy::UCTVariation3 {
                 max_score: GameResult::max_score() as f64,
                 delta: 1e-3,
