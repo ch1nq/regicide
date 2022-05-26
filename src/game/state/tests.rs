@@ -1,15 +1,52 @@
-use crate::game::card::{Card, CardSuit::*, CardValue::*, FromCardIter, Hand};
-use crate::game::Action;
+
+use super::State;
+use crate::game::{
+    card::{CardSuit::*, CardValue::*, FromCardIter},
+    enemy::Enemy,
+    Action, Card, GameStatus, Hand,
+};
+
+#[test]
+fn jester_removes_immunity() {
+    let mut state = State::<3>::new(Some(1337)).unwrap();
+    *state.table.current_enemy_mut().unwrap() = Enemy::new(Card::new(Clubs, Queen));
+
+    assert_eq!(state.current_enemy().unwrap().health(), 30);
+    state = match state.take_action(&Action::Play(Card::new(None, Jester))) {
+        GameStatus::InProgress(state) => state,
+        _ => panic!("Game should not have ended"),
+    };
+    assert_eq!(state.current_enemy().unwrap().health(), 30);
+
+    state = match state.take_action(&Action::Play(Card::new(Clubs, Two))) {
+        GameStatus::InProgress(state) => state,
+        _ => panic!("Game should not have ended"),
+    };
+    assert_eq!(state.current_enemy().unwrap().health(), 26);
+}
+
+#[test]
+fn enemies_are_immune() {
+    let mut state = State::<3>::new(Some(1337)).unwrap();
+    *state.table.current_enemy_mut().unwrap() = Enemy::new(Card::new(Clubs, Queen));
+
+    assert_eq!(state.current_enemy().unwrap().health(), 30);
+    state = match state.take_action(&Action::Play(Card::new(Clubs, Two))) {
+        GameStatus::InProgress(state) => state,
+        _ => panic!("Game should not have ended"),
+    };
+    assert_eq!(state.current_enemy().unwrap().health(), 28);
+}
 
 const SEED: u64 = 1337;
 
 macro_rules! hand {
-    ($(($suit:expr, $value:expr)),+ $(,)?) => (
-        Hand::from_card_iter(vec![
-            $(Card::new($suit, $value)),+
-        ].into_iter())
-    );
-}
+        ($(($suit:expr, $value:expr)),+ $(,)?) => (
+            Hand::from_card_iter(vec![
+                $(Card::new($suit, $value)),+
+            ].into_iter())
+        );
+    }
 
 #[test]
 fn no_duplicate_animal_combos() {
@@ -34,7 +71,7 @@ fn combo_count(actions: &Vec<Action>, variant: &str, combo_len: usize) -> usize 
         .iter()
         .filter(|action| match (variant, action) {
             ("animal", Action::AnimalCombo(_, _)) => true,
-            ("combo", Action::Combo(a)) if a.len() <= combo_len => true,
+            ("combo", Action::Combo(a)) if a.len() == combo_len => true,
             _ => false,
         })
         .count()

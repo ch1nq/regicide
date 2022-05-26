@@ -14,10 +14,13 @@ use std::collections::hash_map::DefaultHasher;
 use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, Copy, Hash)]
 pub struct State<const N_PLAYERS: usize> {
     table: Table,
-    pub players: [Player; N_PLAYERS],
+    players: [Player; N_PLAYERS],
     has_turn: PlayerId,
     times_yielded: usize,
     max_hand_size: u8,
@@ -592,7 +595,7 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> MCTS for MyMCTS<N_PLAYERS, 
     }
 
     fn visits_before_expansion(&self) -> u64 {
-        1
+        1000
     }
 
     fn node_limit(&self) -> usize {
@@ -607,6 +610,13 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> MCTS for MyMCTS<N_PLAYERS, 
             .into_iter()
             .max_by_key(|child| child.visits())
             .unwrap()
+    }
+
+    fn on_backpropagation(
+        &self,
+        _evaln: &mcts::StateEvaluation<Self>,
+        _handle: SearchHandle<Self>,
+    ) {
     }
 }
 
