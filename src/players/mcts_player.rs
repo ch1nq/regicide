@@ -122,6 +122,6 @@ impl MCTSPlayer {
                 .collect(),
         );
 
-        *actions[0].get_move()
+        *actions.get(0).expect("No actions available to choose from").get_move()
     }
 }
