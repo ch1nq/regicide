@@ -1,17 +1,74 @@
-# Project synopsis
+# Regicide
+A framework for playing the card game Regicide.
 
-## Project title
-Using Monte Carlo Tree Search for playing the imperfect information card game Regicide 
+## Requirements
+The package requires python version 3.7+ and should be compatible with Linux, Windows and macOS.
 
-## Project statement
-This project aims to understand and train a Monte Carlo Tree Search algorithm to play the popular card game Regicide. In doing so a framework for playing the game should be developed, that can be used in the future for reinforcement learning research. 
+## Installation
+The Regicide framework can be installed in python using pip.
+```shell
+$ pip install regicide
+```
 
-Specifically, the project should:
+## Usage
 
-1. Present the concept of reinforcement learning
-1. Account for the theoretical foundation of the Monte Carlo Tree Search algorithm
-1. Explain the rules of the game Regicide
-1. Present an implementation of a python framework for playing an imperfect information card game Regicide suitable for use in reinforcement learning
-1. Explain the process of learning to play the card game Regicide using Monte Carlo Tree Search with the implemented framework 
-1. Present the performance of the learned Monte Carlo Tree Search model
-1. Discuss the differences and challenges of learning perfect and imperfect information games
+## Example
+The following is an example of implementing an agent with custom behavior. In this example the agent will always choose to play the six of diamonds if available. Otherwise, it will choose randomly from the available actions.
+```python
+import random
+
+import regicide
+from regicide import actions, card, players
+
+
+class CustomPlayer:
+    """
+    A player that always plays the Six of Diamonds if possible.
+    Otherwise it will choose a random action.
+    """
+
+    def play(self, state):
+        legal_actions = state.action_space()
+
+        c = card.Card(card.CardSuit.Diamonds, card.CardValue.Six)
+        special_action = actions.ActionPlay(c)
+
+        if special_action in legal_actions:
+            return special_action
+        else:
+            return random.choice(legal_actions)
+
+
+players = [CustomPlayer(), CustomPlayer(), CustomPlayer()]
+game = regicide.RegicideGame(players, seed=1337)
+result = game.playout()
+
+print(result, game.reward())
+```
+
+## API
+The framework has three submodules: \cd{actions}, \cd{card} and \cd{players}. Each module contains python classes that can be instantiated and used in the framework.
+
+### Actions
+Available actions are:
+- `Play(card: Card)`
+- `AnimalCombo(cards: List[Card])`
+- `Combo(cards: List[Card])`
+- `Yield()`
+- `Discard(cards: List[Card])`
+- `ChangePlayer(id: int)`
+- `RefillHand`
+
+### Cards
+Available cards are:
+- `Card(suit: CardSuit, value: CardValue)`
+- `CardSuit` that can be: `Spades`, `Hearts`, `Diamonds`, `Clubs` or `None`.
+- `CardValue` that can be `Ace`...`King` or the special value `Jester`.
+
+### Players
+- `InputPlayer()` that allows user input for taking actions.
+- `RandomPlayer(seed: int)`
+- `MCTSPlayer(playouts: int, num_threads: int, uct_variation: int, use_heuristics: bool)`
+
+## Caveats
+Currently, the python package does not support code suggestions in IDE's, making it more difficult to work with the package. This is a result of the method used to generate the python bindings and has no implication on actual performance or correctness of the program.
