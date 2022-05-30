@@ -145,7 +145,8 @@ def generate_data_gridsearch(samples, threads_per_player) -> pd.DataFrame:
             for player_count in [1, 2, 3, 4]:
                 # exponents = [0] * 32 + [1] * 16 + [2] * 8 + [3] * 4 + [4] * 2 + [5] * 1
                 # exponents = sum([[5 - i] * 2 ** (i) for i in range(6)], [])
-                exponents = [5] * ((500 - 384) // 4)
+                # exponents = [5] * ((500 - 384) // 4)
+                exponents = [2] * ((5000 - 2792) // 4)
                 for mcts_playouts in [round(10**exp) for exp in exponents]:
                     # for mcts_playouts in [round(10 ** (i/10.0)) for i in range(1,40)]:
                     args.append(
@@ -168,6 +169,7 @@ def generate_data_gridsearch(samples, threads_per_player) -> pd.DataFrame:
 
 if __name__ == "__main__":
     # random_playout(1000)
+    # while True:
     generate_data_gridsearch(1, 6)
     plot(CSV_PATH)
     # to_latex(TEX_PATH)

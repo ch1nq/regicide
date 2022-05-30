@@ -1,3 +1,4 @@
+regicide==0.1.4
 cycler==0.11.0
 fonttools==4.33.3
 kiwisolver==1.4.2
@@ -14,3 +15,4 @@ seaborn==0.11.2
 six==1.16.0
 tqdm==4.64.0
 statsmodels==0.13.2
+jinja
