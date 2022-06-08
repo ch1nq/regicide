@@ -495,14 +495,14 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> Evaluator<MyMCTS<N_PLAYERS,
         &self,
         state: &State<N_PLAYERS>,
         moves: &Vec<Action>,
-        _: Option<SearchHandle<MyMCTS<N_PLAYERS, HEURISTICS>>>,
+        _handle: Option<SearchHandle<MyMCTS<N_PLAYERS, HEURISTICS>>>,
     ) -> (
         Vec<MoveEvaluation<MyMCTS<N_PLAYERS, HEURISTICS>>>,
         GameResult,
     ) {
         let mut node = *state;
         let mut rng = rand::rngs::StdRng::from_rng(rand::thread_rng()).unwrap();
-        node.random_permutation(&mut rng);
+        node = node.random_permutation(&mut rng);
         let result;
         loop {
             let mut moves = node.available_moves();
@@ -541,6 +541,7 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> Evaluator<MyMCTS<N_PLAYERS,
     ) -> GameResult {
         self.evaluate_new_state(state, &state.available_moves(), Some(handle))
             .1
+        // *evaln
     }
 
     fn interpret_evaluation_for_player(&self, evaln: &GameResult, _player: &Player) -> i64 {
@@ -595,7 +596,7 @@ impl<const N_PLAYERS: usize, const HEURISTICS: bool> MCTS for MyMCTS<N_PLAYERS, 
     }
 
     fn visits_before_expansion(&self) -> u64 {
-        1000
+        1
     }
 
     fn node_limit(&self) -> usize {

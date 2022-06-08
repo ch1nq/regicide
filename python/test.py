@@ -30,7 +30,7 @@ class CustomPlayer:
 class CustomMCTSPlayer:
     def __init__(self) -> None:
         self.base = regicide.players.MCTSPlayer(
-            playouts=10000, use_heuristics=False, num_threads=7, policy_variation=2,
+            playouts=1000, use_heuristics=False, num_threads=7, policy_variation=4, deterministic_samples=100
         )
 
     def play(self, state):
@@ -60,6 +60,6 @@ players = [
     # players.InputPlayer(),
 ] 
 
-game = regicide.RegicideGame(players, seed=None)
+game = regicide.RegicideGame(players, seed=1337)
 result = game.playout()
 print(f"{result = }, reward = {game.reward()}")

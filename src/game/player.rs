@@ -2,7 +2,7 @@ use crate::game::card::{AttackSum, Hand};
 use pyo3::prelude::*;
 
 #[pyclass]
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct PlayerId(pub usize);
 
 impl PlayerId {

@@ -23,7 +23,7 @@ pub enum GameStatus<const N_PLAYERS: usize> {
     HasEnded(GameResult),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Action {
     Play(Card),
     AnimalCombo(Card, Card),

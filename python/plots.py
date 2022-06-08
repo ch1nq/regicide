@@ -145,16 +145,18 @@ def plot(csv_path: str):
     plt.clf()
 
     plt.title(
-        "Win rate of the MCTS 1K agent across UCT policy variations and player counts"
+        "Mean score of the MCTS 10K agent across UCT policy variations and player counts"
+        # "Win rate of the MCTS 10K agent across UCT policy variations and player counts"
     )
     subset = make_subset(
-        data, "tree_policy", {"agent": ["MCTS_1000"], "tree_policy": [0, 1, 2, 3, 4]}
+        data, "tree_policy", {"agent": ["MCTS_10000"], "tree_policy": [0, 1, 2, 3, 4]}
     )
     subset["win"] = subset["score"] == 12
     subset = (
         subset.groupby(["tree_policy", "player_count"], sort=False).mean().reset_index()
     )
-    subset = subset.pivot("tree_policy", "player_count", "win")
+    # subset = subset.pivot("tree_policy", "player_count", "win")
+    subset = subset.pivot("tree_policy", "player_count", "score")
     sns.heatmap(
         data=subset,
         cmap=sns.cubehelix_palette(
@@ -162,7 +164,7 @@ def plot(csv_path: str):
         ),
         annot=True,
         vmin=0,
-        vmax=1,
+        vmax=12,
         fmt=".2f",
     )
     plt.tight_layout()
@@ -171,11 +173,13 @@ def plot(csv_path: str):
     )
     plt.clf()
 
-    plt.title("Win rate MCTS agents across UCT policy variations in 3-player games")
+    # plt.title("Win rate MCTS agents across UCT policy variations in 3-player games")
+    plt.title("Mean score MCTS agents across UCT policy variations in 3-player games")
     subset = data[data["player_count"] == 3]
     subset["win"] = subset["score"] == 12
     subset = subset.groupby(["agent", "tree_policy"], sort=False).mean().reset_index()
-    subset = subset.pivot("agent", "tree_policy", "win")
+    # subset = subset.pivot("agent", "tree_policy", "win")
+    subset = subset.pivot("agent", "tree_policy", "score")
     sns.heatmap(
         data=subset,
         cmap=sns.cubehelix_palette(
@@ -183,7 +187,7 @@ def plot(csv_path: str):
         ),
         annot=True,
         vmin=0,
-        vmax=1,
+        vmax=12,
         fmt=".2f",
     )
     plt.tight_layout()
@@ -195,7 +199,8 @@ def plot(csv_path: str):
     subset = subset.pivot("agent", "player_count", "score")
 
     # Make "Random" the first row
-    subset = subset.loc[["Random"] + [i for i in subset.index if i != "Random"]]
+    if "Random" in subset.columns:
+        subset = subset.loc[["Random"] + [i for i in subset.index if i != "Random"]]
 
     sns.heatmap(
         data=subset,
@@ -213,14 +218,17 @@ def plot(csv_path: str):
     plt.savefig(os.path.join(PLOT_PATH, "heatmap.png"), dpi=300)
     plt.clf()
 
-    plt.title("Win rate across agents and player counts")
+    # plt.title("Win rate across agents and player counts")
+    plt.title("Mean score across agents and deterministic samples")
     subset = data
     subset["win"] = subset["score"] == 12
-    subset = subset.groupby(["agent", "player_count"], sort=False).mean().reset_index()
-    subset = subset.pivot("agent", "player_count", "win")
+    subset = subset.groupby(["agent", "deterministic_samples"], sort=False).mean().reset_index()
+    # subset = subset.pivot("agent", "player_count", "win")
+    subset = subset.pivot("agent", "deterministic_samples", "score")
 
     # Make "Random" the first row
-    subset = subset.loc[["Random"] + [i for i in subset.index if i != "Random"]]
+    if "Random" in subset.columns:
+        subset = subset.loc[["Random"] + [i for i in subset.index if i != "Random"]]
 
     sns.heatmap(
         data=subset,
@@ -229,10 +237,10 @@ def plot(csv_path: str):
         ),
         annot=True,
         vmin=0,
-        vmax=1,
+        vmax=12,
         fmt=".2f",
     )
-    plt.xlabel("Player count")
+    plt.xlabel("Deterministic samples")
     plt.ylabel("Agent")
     plt.tight_layout()
     plt.savefig(os.path.join(PLOT_PATH, "heatmap_winrate.png"), dpi=300)
@@ -243,7 +251,8 @@ def plot(csv_path: str):
     subset = subset.pivot("agent", "player_count", "score")
 
     # Make "Random" the first row
-    subset = subset.loc[["Random"] + [i for i in subset.index if i != "Random"]]
+    if "Random" in subset.columns:
+        subset = subset.loc[["Random"] + [i for i in subset.index if i != "Random"]]
 
     sns.heatmap(
         data=subset,
