@@ -1,5 +1,5 @@
 # Regicide
-A framework for playing the card game Regicide.
+A framework for playing the card game [Regicide](https://www.badgersfrommars.com/regicide/).
 
 ## Requirements
 The package requires python version 3.7+ and should be compatible with Linux, Windows and macOS.
@@ -10,9 +10,10 @@ The Regicide framework can be installed in python using pip.
 $ pip install regicide
 ```
 
-## Usage
+## How to play
+The implementation follows [the official rules](https://www.badgersfrommars.com/assets/RegicideRulesA4.pdf).
 
-## Example
+### Example
 The following is an example of implementing an agent with custom behavior. In this example the agent will always choose to play the six of diamonds if available. Otherwise, it will choose randomly from the available actions.
 ```python
 import random
@@ -47,7 +48,7 @@ print(result, game.reward())
 ```
 
 ## API
-The framework has three submodules: \cd{actions}, \cd{card} and \cd{players}. Each module contains python classes that can be instantiated and used in the framework.
+The framework has three submodules: `actions`, `card` and `players`. Each module contains python classes that can be instantiated and used in the framework.
 
 ### Actions
 Available actions are:
