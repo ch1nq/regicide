@@ -1,6 +1,6 @@
 regicide==0.1.4
 cycler==0.11.0
-fonttools==4.33.3
+fonttools==4.43.0
 kiwisolver==1.4.2
 matplotlib==3.5.2
 numpy==1.22.3
