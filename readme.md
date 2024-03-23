@@ -13,6 +13,10 @@ $ pip install regicide
 ## How to play
 The implementation follows [the official rules](https://www.badgersfrommars.com/assets/RegicideRulesA4.pdf).
 
+<p align="center">
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=7XoRlKzLobk" target="_blank"><img src="http://img.youtube.com/vi/7XoRlKzLobk/0.jpg" alt="Regicide Learn to Play"/></a>
+</p>
+
 ### Example
 The following is an example of implementing an agent with custom behavior. In this example the agent will always choose to play the six of diamonds if available. Otherwise, it will choose randomly from the available actions.
 ```python
